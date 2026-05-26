@@ -6,6 +6,7 @@ import { ClientesModule } from './clientes/clientes.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProdutosModule } from './produtos/produtos.module';
 import { PedidosModule } from './pedidos/pedidos.module';
+import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { PedidosModule } from './pedidos/pedidos.module';
     CategoriasModule,
     ProdutosModule,
     PedidosModule,
+    AvaliacoesModule,
   ],
 })
 export class AppModule {}
