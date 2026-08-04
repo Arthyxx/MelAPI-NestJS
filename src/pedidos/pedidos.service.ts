@@ -9,6 +9,31 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreatePedidoDto } from './dto/create-pedido.dto';
 import { UpdateStatusPedidoDto } from './dto/update-status-pedido.dto';
 
+const ALLOWED_STATUS_TRANSITIONS: Record<
+  StatusPedido,
+  StatusPedido[]
+> = {
+  [StatusPedido.PENDENTE]: [
+    StatusPedido.PAGO,
+    StatusPedido.CANCELADO,
+  ],
+  [StatusPedido.PAGO]: [
+    StatusPedido.CONFIRMADO,
+    StatusPedido.CANCELADO,
+  ],
+  [StatusPedido.CONFIRMADO]: [
+    StatusPedido.PREPARANDO,
+    StatusPedido.CANCELADO,
+  ],
+  [StatusPedido.PREPARANDO]: [
+    StatusPedido.ENVIADO,
+    StatusPedido.CANCELADO,
+  ],
+  [StatusPedido.ENVIADO]: [StatusPedido.ENTREGUE],
+  [StatusPedido.ENTREGUE]: [],
+  [StatusPedido.CANCELADO]: [],
+};
+
 @Injectable()
 export class PedidosService {
   constructor(private readonly prisma: PrismaService) {}
@@ -56,7 +81,9 @@ export class PedidosService {
     }
 
     if (pedido.clienteId !== clienteId) {
-      throw new ForbiddenException('Você não tem permissão para acessar este pedido.');
+      throw new ForbiddenException(
+        'Você não tem permissão para acessar este pedido.',
+      );
     }
 
     return this.toResponse(pedido);
@@ -90,11 +117,15 @@ export class PedidosService {
     });
 
     if (produtos.length !== uniqueProdutoIds.length) {
-      throw new NotFoundException('Um ou mais produtos não foram encontrados.');
+      throw new NotFoundException(
+        'Um ou mais produtos não foram encontrados.',
+      );
     }
 
     const itemsData = dto.items.map((item) => {
-      const produto = produtos.find((produto) => produto.id === item.produtoId);
+      const produto = produtos.find(
+        (produtoAtual) => produtoAtual.id === item.produtoId,
+      );
 
       if (!produto) {
         throw new NotFoundException('Produto não encontrado.');
@@ -130,14 +161,26 @@ export class PedidosService {
 
     const pedido = await this.prisma.$transaction(async (tx) => {
       for (const item of itemsData) {
-        await tx.produto.update({
-          where: { id: item.produto.id },
+        const stockUpdate = await tx.produto.updateMany({
+          where: {
+            id: item.produto.id,
+            active: true,
+            stockQuantity: {
+              gte: item.quantity,
+            },
+          },
           data: {
             stockQuantity: {
               decrement: item.quantity,
             },
           },
         });
+
+        if (stockUpdate.count !== 1) {
+          throw new BadRequestException(
+            `O estoque do produto "${item.produto.name}" foi alterado. Verifique a quantidade disponível e tente novamente.`,
+          );
+        }
       }
 
       return tx.pedido.create({
@@ -162,28 +205,78 @@ export class PedidosService {
   }
 
   async updateStatus(id: number, dto: UpdateStatusPedidoDto) {
-    await this.ensurePedidoExists(id);
-
-    const pedido = await this.prisma.pedido.update({
+    const pedidoAtual = await this.prisma.pedido.findUnique({
       where: { id },
-      data: {
-        status: dto.status,
+      include: {
+        items: {
+          select: {
+            produtoId: true,
+            quantity: true,
+          },
+        },
       },
-      include: this.defaultInclude(),
     });
 
-    return this.toResponse(pedido);
-  }
-
-  private async ensurePedidoExists(id: number) {
-    const pedido = await this.prisma.pedido.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-
-    if (!pedido) {
+    if (!pedidoAtual) {
       throw new NotFoundException('Pedido não encontrado.');
     }
+
+    if (pedidoAtual.status === dto.status) {
+      return this.findById(id);
+    }
+
+    const allowedStatuses =
+      ALLOWED_STATUS_TRANSITIONS[pedidoAtual.status];
+
+    if (!allowedStatuses.includes(dto.status)) {
+      throw new BadRequestException(
+        `Não é permitido alterar o pedido de ${pedidoAtual.status} para ${dto.status}.`,
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const statusUpdate = await tx.pedido.updateMany({
+        where: {
+          id,
+          status: pedidoAtual.status,
+        },
+        data: {
+          status: dto.status,
+        },
+      });
+
+      if (statusUpdate.count !== 1) {
+        throw new BadRequestException(
+          'O status deste pedido foi alterado por outra operação. Atualize a página e tente novamente.',
+        );
+      }
+
+      if (dto.status === StatusPedido.CANCELADO) {
+        for (const item of pedidoAtual.items) {
+          await tx.produto.update({
+            where: {
+              id: item.produtoId,
+            },
+            data: {
+              stockQuantity: {
+                increment: item.quantity,
+              },
+            },
+          });
+        }
+      }
+
+      const pedidoAtualizado = await tx.pedido.findUnique({
+        where: { id },
+        include: this.defaultInclude(),
+      });
+
+      if (!pedidoAtualizado) {
+        throw new NotFoundException('Pedido não encontrado.');
+      }
+
+      return this.toResponse(pedidoAtualizado);
+    });
   }
 
   private defaultInclude() {
