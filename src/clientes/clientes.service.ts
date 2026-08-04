@@ -15,23 +15,32 @@ import { PatchClienteDto } from './dto/patch-cliente.dto';
 
 @Injectable()
 export class ClientesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+  ) {}
 
   async findAll() {
     return this.prisma.cliente.findMany({
-      orderBy: { id: 'asc' },
+      orderBy: {
+        id: 'asc',
+      },
       select: this.defaultSelect(),
     });
   }
 
   async findById(id: number) {
-    const cliente = await this.prisma.cliente.findUnique({
-      where: { id },
-      select: this.defaultSelect(),
-    });
+    const cliente =
+      await this.prisma.cliente.findUnique({
+        where: {
+          id,
+        },
+        select: this.defaultSelect(),
+      });
 
     if (!cliente) {
-      throw new NotFoundException('Cliente não encontrado.');
+      throw new NotFoundException(
+        'Cliente não encontrado.',
+      );
     }
 
     return cliente;
@@ -42,11 +51,13 @@ export class ClientesService {
   }
 
   async create(dto: CreateClienteDto) {
-    const email = dto.email.trim().toLowerCase();
+    const email =
+      dto.email.trim().toLowerCase();
 
     await this.ensureEmailIsAvailable(email);
 
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const hashedPassword =
+      await bcrypt.hash(dto.password, 10);
 
     return this.prisma.cliente.create({
       data: {
@@ -54,25 +65,46 @@ export class ClientesService {
         email,
         password: hashedPassword,
         role: Role.CLIENTE,
-        phone: this.normalizeOptional(dto.phone),
-        street: this.normalizeOptional(dto.street),
-        addressNumber: this.normalizeOptional(dto.addressNumber),
-        complement: this.normalizeOptional(dto.complement),
-        neighborhood: this.normalizeOptional(dto.neighborhood),
-        city: this.normalizeOptional(dto.city),
-        state: this.normalizeState(dto.state),
-        zipCode: this.normalizeOptional(dto.zipCode),
+        active: true,
+        phone:
+          this.normalizeOptional(dto.phone),
+        street:
+          this.normalizeOptional(dto.street),
+        addressNumber:
+          this.normalizeOptional(
+            dto.addressNumber,
+          ),
+        complement:
+          this.normalizeOptional(
+            dto.complement,
+          ),
+        neighborhood:
+          this.normalizeOptional(
+            dto.neighborhood,
+          ),
+        city:
+          this.normalizeOptional(dto.city),
+        state:
+          this.normalizeState(dto.state),
+        zipCode:
+          this.normalizeOptional(
+            dto.zipCode,
+          ),
       },
       select: this.defaultSelect(),
     });
   }
 
-  async createAdmin(dto: CreateAdminClienteDto) {
-    const email = dto.email.trim().toLowerCase();
+  async createAdmin(
+    dto: CreateAdminClienteDto,
+  ) {
+    const email =
+      dto.email.trim().toLowerCase();
 
     await this.ensureEmailIsAvailable(email);
 
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const hashedPassword =
+      await bcrypt.hash(dto.password, 10);
 
     return this.prisma.cliente.create({
       data: {
@@ -80,220 +112,413 @@ export class ClientesService {
         email,
         password: hashedPassword,
         role: dto.role ?? Role.CLIENTE,
-        phone: this.normalizeOptional(dto.phone),
-        street: this.normalizeOptional(dto.street),
-        addressNumber: this.normalizeOptional(dto.addressNumber),
-        complement: this.normalizeOptional(dto.complement),
-        neighborhood: this.normalizeOptional(dto.neighborhood),
-        city: this.normalizeOptional(dto.city),
-        state: this.normalizeState(dto.state),
-        zipCode: this.normalizeOptional(dto.zipCode),
+        active: dto.active ?? true,
+        phone:
+          this.normalizeOptional(dto.phone),
+        street:
+          this.normalizeOptional(dto.street),
+        addressNumber:
+          this.normalizeOptional(
+            dto.addressNumber,
+          ),
+        complement:
+          this.normalizeOptional(
+            dto.complement,
+          ),
+        neighborhood:
+          this.normalizeOptional(
+            dto.neighborhood,
+          ),
+        city:
+          this.normalizeOptional(dto.city),
+        state:
+          this.normalizeState(dto.state),
+        zipCode:
+          this.normalizeOptional(
+            dto.zipCode,
+          ),
       },
       select: this.defaultSelect(),
     });
   }
 
-  async updateMe(clienteId: number, dto: PatchClienteDto) {
-    return this.partialUpdate(clienteId, dto);
+  async updateMe(
+    clienteId: number,
+    dto: PatchClienteDto,
+  ) {
+    return this.partialUpdate(
+      clienteId,
+      dto,
+    );
   }
 
-  async updateAdmin(id: number, dto: UpdateAdminClienteDto) {
+  async updateAdmin(
+    id: number,
+    dto: UpdateAdminClienteDto,
+  ) {
     await this.ensureClienteExists(id);
 
-    const data: Prisma.ClienteUpdateInput = {};
+    const data: Prisma.ClienteUpdateInput =
+      {};
 
     if (dto.name !== undefined) {
       data.name = dto.name.trim();
     }
 
     if (dto.email !== undefined) {
-      const email = dto.email.trim().toLowerCase();
+      const email =
+        dto.email.trim().toLowerCase();
 
-      await this.ensureEmailIsAvailable(email, id);
+      await this.ensureEmailIsAvailable(
+        email,
+        id,
+      );
 
       data.email = email;
     }
 
     if (dto.password !== undefined) {
-      data.password = await bcrypt.hash(dto.password, 10);
+      data.password = await bcrypt.hash(
+        dto.password,
+        10,
+      );
     }
 
     if (dto.role !== undefined) {
       data.role = dto.role;
     }
 
+    if (dto.active !== undefined) {
+      data.active = dto.active;
+    }
+
     if (dto.phone !== undefined) {
-      data.phone = this.normalizeOptional(dto.phone);
+      data.phone =
+        this.normalizeOptional(dto.phone);
     }
 
     if (dto.street !== undefined) {
-      data.street = this.normalizeOptional(dto.street);
+      data.street =
+        this.normalizeOptional(dto.street);
     }
 
     if (dto.addressNumber !== undefined) {
-      data.addressNumber = this.normalizeOptional(dto.addressNumber);
+      data.addressNumber =
+        this.normalizeOptional(
+          dto.addressNumber,
+        );
     }
 
     if (dto.complement !== undefined) {
-      data.complement = this.normalizeOptional(dto.complement);
+      data.complement =
+        this.normalizeOptional(
+          dto.complement,
+        );
     }
 
     if (dto.neighborhood !== undefined) {
-      data.neighborhood = this.normalizeOptional(dto.neighborhood);
+      data.neighborhood =
+        this.normalizeOptional(
+          dto.neighborhood,
+        );
     }
 
     if (dto.city !== undefined) {
-      data.city = this.normalizeOptional(dto.city);
+      data.city =
+        this.normalizeOptional(dto.city);
     }
 
     if (dto.state !== undefined) {
-      data.state = this.normalizeState(dto.state);
+      data.state =
+        this.normalizeState(dto.state);
     }
 
     if (dto.zipCode !== undefined) {
-      data.zipCode = this.normalizeOptional(dto.zipCode);
+      data.zipCode =
+        this.normalizeOptional(
+          dto.zipCode,
+        );
     }
 
     return this.prisma.cliente.update({
-      where: { id },
+      where: {
+        id,
+      },
       data,
       select: this.defaultSelect(),
     });
   }
 
-  async update(id: number, dto: CreateClienteDto) {
-    const email = dto.email.trim().toLowerCase();
+  async update(
+    id: number,
+    dto: CreateClienteDto,
+  ) {
+    const email =
+      dto.email.trim().toLowerCase();
 
     await this.ensureClienteExists(id);
-    await this.ensureEmailIsAvailable(email, id);
 
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    await this.ensureEmailIsAvailable(
+      email,
+      id,
+    );
+
+    const hashedPassword =
+      await bcrypt.hash(dto.password, 10);
 
     return this.prisma.cliente.update({
-      where: { id },
+      where: {
+        id,
+      },
       data: {
         name: dto.name.trim(),
         email,
         password: hashedPassword,
-        phone: this.normalizeOptional(dto.phone),
-        street: this.normalizeOptional(dto.street),
-        addressNumber: this.normalizeOptional(dto.addressNumber),
-        complement: this.normalizeOptional(dto.complement),
-        neighborhood: this.normalizeOptional(dto.neighborhood),
-        city: this.normalizeOptional(dto.city),
-        state: this.normalizeState(dto.state),
-        zipCode: this.normalizeOptional(dto.zipCode),
+        phone:
+          this.normalizeOptional(dto.phone),
+        street:
+          this.normalizeOptional(dto.street),
+        addressNumber:
+          this.normalizeOptional(
+            dto.addressNumber,
+          ),
+        complement:
+          this.normalizeOptional(
+            dto.complement,
+          ),
+        neighborhood:
+          this.normalizeOptional(
+            dto.neighborhood,
+          ),
+        city:
+          this.normalizeOptional(dto.city),
+        state:
+          this.normalizeState(dto.state),
+        zipCode:
+          this.normalizeOptional(
+            dto.zipCode,
+          ),
       },
       select: this.defaultSelect(),
     });
   }
 
-  async partialUpdate(id: number, dto: PatchClienteDto) {
+  async partialUpdate(
+    id: number,
+    dto: PatchClienteDto,
+  ) {
     await this.ensureClienteExists(id);
 
-    const data: Prisma.ClienteUpdateInput = {};
+    const data: Prisma.ClienteUpdateInput =
+      {};
 
     if (dto.name !== undefined) {
       data.name = dto.name.trim();
     }
 
     if (dto.email !== undefined) {
-      const email = dto.email.trim().toLowerCase();
+      const email =
+        dto.email.trim().toLowerCase();
 
-      await this.ensureEmailIsAvailable(email, id);
+      await this.ensureEmailIsAvailable(
+        email,
+        id,
+      );
 
       data.email = email;
     }
 
     if (dto.password !== undefined) {
-      data.password = await bcrypt.hash(dto.password, 10);
+      data.password = await bcrypt.hash(
+        dto.password,
+        10,
+      );
     }
 
     if (dto.phone !== undefined) {
-      data.phone = this.normalizeOptional(dto.phone);
+      data.phone =
+        this.normalizeOptional(dto.phone);
     }
 
     if (dto.street !== undefined) {
-      data.street = this.normalizeOptional(dto.street);
+      data.street =
+        this.normalizeOptional(dto.street);
     }
 
     if (dto.addressNumber !== undefined) {
-      data.addressNumber = this.normalizeOptional(dto.addressNumber);
+      data.addressNumber =
+        this.normalizeOptional(
+          dto.addressNumber,
+        );
     }
 
     if (dto.complement !== undefined) {
-      data.complement = this.normalizeOptional(dto.complement);
+      data.complement =
+        this.normalizeOptional(
+          dto.complement,
+        );
     }
 
     if (dto.neighborhood !== undefined) {
-      data.neighborhood = this.normalizeOptional(dto.neighborhood);
+      data.neighborhood =
+        this.normalizeOptional(
+          dto.neighborhood,
+        );
     }
 
     if (dto.city !== undefined) {
-      data.city = this.normalizeOptional(dto.city);
+      data.city =
+        this.normalizeOptional(dto.city);
     }
 
     if (dto.state !== undefined) {
-      data.state = this.normalizeState(dto.state);
+      data.state =
+        this.normalizeState(dto.state);
     }
 
     if (dto.zipCode !== undefined) {
-      data.zipCode = this.normalizeOptional(dto.zipCode);
+      data.zipCode =
+        this.normalizeOptional(
+          dto.zipCode,
+        );
     }
 
     return this.prisma.cliente.update({
-      where: { id },
+      where: {
+        id,
+      },
       data,
       select: this.defaultSelect(),
     });
   }
 
-  async delete(id: number) {
-    await this.ensureClienteExists(id);
-
-    await this.prisma.cliente.delete({
-      where: { id },
-    });
-  }
-
-  private async ensureClienteExists(id: number) {
-    const cliente = await this.prisma.cliente.findUnique({
-      where: { id },
-      select: { id: true },
-    });
+  async delete(id: number): Promise<void> {
+    const cliente =
+      await this.prisma.cliente.findUnique({
+        where: {
+          id,
+        },
+        select: {
+          id: true,
+          _count: {
+            select: {
+              pedidos: true,
+            },
+          },
+        },
+      });
 
     if (!cliente) {
-      throw new NotFoundException('Cliente não encontrado.');
+      throw new NotFoundException(
+        'Cliente não encontrado.',
+      );
+    }
+
+    if (cliente._count.pedidos > 0) {
+      await this.deactivateCliente(id);
+      return;
+    }
+
+    try {
+      await this.prisma.cliente.delete({
+        where: {
+          id,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof
+          Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        await this.deactivateCliente(id);
+        return;
+      }
+
+      throw error;
+    }
+  }
+
+  private async ensureClienteExists(
+    id: number,
+  ): Promise<void> {
+    const cliente =
+      await this.prisma.cliente.findUnique({
+        where: {
+          id,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    if (!cliente) {
+      throw new NotFoundException(
+        'Cliente não encontrado.',
+      );
     }
   }
 
   private async ensureEmailIsAvailable(
     email: string,
     ignoreClienteId?: number,
-  ) {
-    const cliente = await this.prisma.cliente.findFirst({
-      where: {
-        email,
-        NOT: ignoreClienteId ? { id: ignoreClienteId } : undefined,
-      },
-      select: { id: true },
-    });
+  ): Promise<void> {
+    const cliente =
+      await this.prisma.cliente.findFirst({
+        where: {
+          email,
+          NOT:
+            ignoreClienteId !== undefined
+              ? {
+                  id: ignoreClienteId,
+                }
+              : undefined,
+        },
+        select: {
+          id: true,
+        },
+      });
 
     if (cliente) {
-      throw new ConflictException('Este e-mail já está em uso.');
+      throw new ConflictException(
+        'Este e-mail já está em uso.',
+      );
     }
   }
 
-  private normalizeOptional(value?: string): string | null {
-    const normalizedValue = value?.trim();
-
-    return normalizedValue ? normalizedValue : null;
+  private async deactivateCliente(
+    id: number,
+  ): Promise<void> {
+    await this.prisma.cliente.update({
+      where: {
+        id,
+      },
+      data: {
+        active: false,
+      },
+    });
   }
 
-  private normalizeState(value?: string): string | null {
-    const normalizedState = value?.trim().toUpperCase();
+  private normalizeOptional(
+    value?: string,
+  ): string | null {
+    const normalizedValue =
+      value?.trim();
 
-    return normalizedState ? normalizedState : null;
+    return normalizedValue
+      ? normalizedValue
+      : null;
+  }
+
+  private normalizeState(
+    value?: string,
+  ): string | null {
+    const normalizedState =
+      value?.trim().toUpperCase();
+
+    return normalizedState
+      ? normalizedState
+      : null;
   }
 
   private defaultSelect() {
@@ -302,6 +527,7 @@ export class ClientesService {
       name: true,
       email: true,
       role: true,
+      active: true,
       phone: true,
       street: true,
       addressNumber: true,

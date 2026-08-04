@@ -23,11 +23,12 @@ enum StatusPedido {
 }
 
 model Cliente {
-  id        Int      @id @default(autoincrement())
-  name      String   @db.VarChar(120)
-  email     String   @unique @db.VarChar(160)
-  password  String   @db.VarChar(255)
-  role      Role     @default(CLIENTE)
+  id       Int     @id @default(autoincrement())
+  name     String  @db.VarChar(120)
+  email    String  @unique @db.VarChar(160)
+  password String  @db.VarChar(255)
+  role     Role    @default(CLIENTE)
+  active   Boolean @default(true)
 
   phone         String? @db.VarChar(20)
   street        String? @db.VarChar(160)
