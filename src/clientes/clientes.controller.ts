@@ -16,6 +16,10 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import type { AuthUser } from '../common/types/auth-user.type';
 import { ClientesService } from './clientes.service';
+import {
+  CreateAdminClienteDto,
+  UpdateAdminClienteDto,
+} from './dto/admin-cliente.dto';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { PatchClienteDto } from './dto/patch-cliente.dto';
 
@@ -26,6 +30,13 @@ export class ClientesController {
   @Post()
   create(@Body() dto: CreateClienteDto) {
     return this.clientesService.create(dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('admin')
+  createAdmin(@Body() dto: CreateAdminClienteDto) {
+    return this.clientesService.createAdmin(dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -59,9 +70,9 @@ export class ClientesController {
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CreateClienteDto,
+    @Body() dto: UpdateAdminClienteDto,
   ) {
-    return this.clientesService.update(id, dto);
+    return this.clientesService.updateAdmin(id, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -69,9 +80,9 @@ export class ClientesController {
   @Patch(':id')
   partialUpdate(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: PatchClienteDto,
+    @Body() dto: UpdateAdminClienteDto,
   ) {
-    return this.clientesService.partialUpdate(id, dto);
+    return this.clientesService.updateAdmin(id, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -3,9 +3,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  CreateAdminClienteDto,
+  UpdateAdminClienteDto,
+} from './dto/admin-cliente.dto';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { PatchClienteDto } from './dto/patch-cliente.dto';
 
@@ -40,13 +44,7 @@ export class ClientesService {
   async create(dto: CreateClienteDto) {
     const email = dto.email.trim().toLowerCase();
 
-    const emailAlreadyExists = await this.prisma.cliente.findUnique({
-      where: { email },
-    });
-
-    if (emailAlreadyExists) {
-      throw new ConflictException('Já existe um cliente com este e-mail.');
-    }
+    await this.ensureEmailIsAvailable(email);
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
@@ -56,6 +54,40 @@ export class ClientesService {
         email,
         password: hashedPassword,
         role: Role.CLIENTE,
+        phone: this.normalizeOptional(dto.phone),
+        street: this.normalizeOptional(dto.street),
+        addressNumber: this.normalizeOptional(dto.addressNumber),
+        complement: this.normalizeOptional(dto.complement),
+        neighborhood: this.normalizeOptional(dto.neighborhood),
+        city: this.normalizeOptional(dto.city),
+        state: this.normalizeState(dto.state),
+        zipCode: this.normalizeOptional(dto.zipCode),
+      },
+      select: this.defaultSelect(),
+    });
+  }
+
+  async createAdmin(dto: CreateAdminClienteDto) {
+    const email = dto.email.trim().toLowerCase();
+
+    await this.ensureEmailIsAvailable(email);
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    return this.prisma.cliente.create({
+      data: {
+        name: dto.name.trim(),
+        email,
+        password: hashedPassword,
+        role: dto.role ?? Role.CLIENTE,
+        phone: this.normalizeOptional(dto.phone),
+        street: this.normalizeOptional(dto.street),
+        addressNumber: this.normalizeOptional(dto.addressNumber),
+        complement: this.normalizeOptional(dto.complement),
+        neighborhood: this.normalizeOptional(dto.neighborhood),
+        city: this.normalizeOptional(dto.city),
+        state: this.normalizeState(dto.state),
+        zipCode: this.normalizeOptional(dto.zipCode),
       },
       select: this.defaultSelect(),
     });
@@ -65,11 +97,74 @@ export class ClientesService {
     return this.partialUpdate(clienteId, dto);
   }
 
+  async updateAdmin(id: number, dto: UpdateAdminClienteDto) {
+    await this.ensureClienteExists(id);
+
+    const data: Prisma.ClienteUpdateInput = {};
+
+    if (dto.name !== undefined) {
+      data.name = dto.name.trim();
+    }
+
+    if (dto.email !== undefined) {
+      const email = dto.email.trim().toLowerCase();
+
+      await this.ensureEmailIsAvailable(email, id);
+
+      data.email = email;
+    }
+
+    if (dto.password !== undefined) {
+      data.password = await bcrypt.hash(dto.password, 10);
+    }
+
+    if (dto.role !== undefined) {
+      data.role = dto.role;
+    }
+
+    if (dto.phone !== undefined) {
+      data.phone = this.normalizeOptional(dto.phone);
+    }
+
+    if (dto.street !== undefined) {
+      data.street = this.normalizeOptional(dto.street);
+    }
+
+    if (dto.addressNumber !== undefined) {
+      data.addressNumber = this.normalizeOptional(dto.addressNumber);
+    }
+
+    if (dto.complement !== undefined) {
+      data.complement = this.normalizeOptional(dto.complement);
+    }
+
+    if (dto.neighborhood !== undefined) {
+      data.neighborhood = this.normalizeOptional(dto.neighborhood);
+    }
+
+    if (dto.city !== undefined) {
+      data.city = this.normalizeOptional(dto.city);
+    }
+
+    if (dto.state !== undefined) {
+      data.state = this.normalizeState(dto.state);
+    }
+
+    if (dto.zipCode !== undefined) {
+      data.zipCode = this.normalizeOptional(dto.zipCode);
+    }
+
+    return this.prisma.cliente.update({
+      where: { id },
+      data,
+      select: this.defaultSelect(),
+    });
+  }
+
   async update(id: number, dto: CreateClienteDto) {
     const email = dto.email.trim().toLowerCase();
 
     await this.ensureClienteExists(id);
-
     await this.ensureEmailIsAvailable(email, id);
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
@@ -80,6 +175,14 @@ export class ClientesService {
         name: dto.name.trim(),
         email,
         password: hashedPassword,
+        phone: this.normalizeOptional(dto.phone),
+        street: this.normalizeOptional(dto.street),
+        addressNumber: this.normalizeOptional(dto.addressNumber),
+        complement: this.normalizeOptional(dto.complement),
+        neighborhood: this.normalizeOptional(dto.neighborhood),
+        city: this.normalizeOptional(dto.city),
+        state: this.normalizeState(dto.state),
+        zipCode: this.normalizeOptional(dto.zipCode),
       },
       select: this.defaultSelect(),
     });
@@ -88,24 +191,54 @@ export class ClientesService {
   async partialUpdate(id: number, dto: PatchClienteDto) {
     await this.ensureClienteExists(id);
 
-    const data: {
-      name?: string;
-      email?: string;
-      password?: string;
-    } = {};
+    const data: Prisma.ClienteUpdateInput = {};
 
-    if (dto.name) {
+    if (dto.name !== undefined) {
       data.name = dto.name.trim();
     }
 
-    if (dto.email) {
+    if (dto.email !== undefined) {
       const email = dto.email.trim().toLowerCase();
+
       await this.ensureEmailIsAvailable(email, id);
+
       data.email = email;
     }
 
-    if (dto.password) {
+    if (dto.password !== undefined) {
       data.password = await bcrypt.hash(dto.password, 10);
+    }
+
+    if (dto.phone !== undefined) {
+      data.phone = this.normalizeOptional(dto.phone);
+    }
+
+    if (dto.street !== undefined) {
+      data.street = this.normalizeOptional(dto.street);
+    }
+
+    if (dto.addressNumber !== undefined) {
+      data.addressNumber = this.normalizeOptional(dto.addressNumber);
+    }
+
+    if (dto.complement !== undefined) {
+      data.complement = this.normalizeOptional(dto.complement);
+    }
+
+    if (dto.neighborhood !== undefined) {
+      data.neighborhood = this.normalizeOptional(dto.neighborhood);
+    }
+
+    if (dto.city !== undefined) {
+      data.city = this.normalizeOptional(dto.city);
+    }
+
+    if (dto.state !== undefined) {
+      data.state = this.normalizeState(dto.state);
+    }
+
+    if (dto.zipCode !== undefined) {
+      data.zipCode = this.normalizeOptional(dto.zipCode);
     }
 
     return this.prisma.cliente.update({
@@ -134,7 +267,10 @@ export class ClientesService {
     }
   }
 
-  private async ensureEmailIsAvailable(email: string, ignoreClienteId?: number) {
+  private async ensureEmailIsAvailable(
+    email: string,
+    ignoreClienteId?: number,
+  ) {
     const cliente = await this.prisma.cliente.findFirst({
       where: {
         email,
@@ -148,12 +284,32 @@ export class ClientesService {
     }
   }
 
+  private normalizeOptional(value?: string): string | null {
+    const normalizedValue = value?.trim();
+
+    return normalizedValue ? normalizedValue : null;
+  }
+
+  private normalizeState(value?: string): string | null {
+    const normalizedState = value?.trim().toUpperCase();
+
+    return normalizedState ? normalizedState : null;
+  }
+
   private defaultSelect() {
     return {
       id: true,
       name: true,
       email: true,
       role: true,
+      phone: true,
+      street: true,
+      addressNumber: true,
+      complement: true,
+      neighborhood: true,
+      city: true,
+      state: true,
+      zipCode: true,
       createdAt: true,
       updatedAt: true,
     };
