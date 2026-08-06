@@ -15,7 +15,18 @@ export class CategoriasService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async findAll() {
+  async findAllActive() {
+    return this.prisma.categoria.findMany({
+      where: {
+        active: true,
+      },
+      orderBy: {
+        id: 'asc',
+      },
+    });
+  }
+
+  async findAllAdmin() {
     return this.prisma.categoria.findMany({
       orderBy: {
         id: 'asc',
@@ -25,9 +36,10 @@ export class CategoriasService {
 
   async findById(id: number) {
     const categoria =
-      await this.prisma.categoria.findUnique({
+      await this.prisma.categoria.findFirst({
         where: {
           id,
+          active: true,
         },
       });
 
@@ -68,6 +80,38 @@ export class CategoriasService {
       id,
     );
 
+    if (!dto.active) {
+      return this.prisma.$transaction(
+        async (transaction) => {
+          const categoria =
+            await transaction.categoria.update({
+              where: {
+                id,
+              },
+              data: {
+                name,
+                description:
+                  dto.description?.trim() ||
+                  null,
+                active: false,
+              },
+            });
+
+          await transaction.produto.updateMany({
+            where: {
+              categoryId: id,
+              active: true,
+            },
+            data: {
+              active: false,
+            },
+          });
+
+          return categoria;
+        },
+      );
+    }
+
     return this.prisma.categoria.update({
       where: {
         id,
@@ -76,7 +120,7 @@ export class CategoriasService {
         name,
         description:
           dto.description?.trim() || null,
-        active: dto.active,
+        active: true,
       },
     });
   }
@@ -108,6 +152,32 @@ export class CategoriasService {
 
     if (dto.active !== undefined) {
       data.active = dto.active;
+    }
+
+    if (dto.active === false) {
+      return this.prisma.$transaction(
+        async (transaction) => {
+          const categoria =
+            await transaction.categoria.update({
+              where: {
+                id,
+              },
+              data,
+            });
+
+          await transaction.produto.updateMany({
+            where: {
+              categoryId: id,
+              active: true,
+            },
+            data: {
+              active: false,
+            },
+          });
+
+          return categoria;
+        },
+      );
     }
 
     return this.prisma.categoria.update({

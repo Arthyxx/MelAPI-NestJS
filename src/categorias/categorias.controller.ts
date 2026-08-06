@@ -14,7 +14,10 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { Roles, RolesGuard } from '../common/guards/roles.guard';
+import {
+  Roles,
+  RolesGuard,
+} from '../common/guards/roles.guard';
 import { CategoriasService } from './categorias.service';
 import { CreateCategoriaDto } from './dto/create-categoria.dto';
 import { PatchCategoriaDto } from './dto/patch-categoria.dto';
@@ -22,15 +25,26 @@ import { PutCategoriaDto } from './dto/put-categoria.dto';
 
 @Controller('categorias')
 export class CategoriasController {
-  constructor(private readonly categoriasService: CategoriasService) {}
+  constructor(
+    private readonly categoriasService: CategoriasService,
+  ) {}
 
   @Get()
-  findAll() {
-    return this.categoriasService.findAll();
+  findAllActive() {
+    return this.categoriasService.findAllActive();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('admin')
+  findAllAdmin() {
+    return this.categoriasService.findAllAdmin();
   }
 
   @Get(':id')
-  findById(@Param('id', ParseIntPipe) id: number) {
+  findById(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
     return this.categoriasService.findById(id);
   }
 
@@ -49,7 +63,10 @@ export class CategoriasController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: PutCategoriaDto,
   ) {
-    return this.categoriasService.update(id, dto);
+    return this.categoriasService.update(
+      id,
+      dto,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -59,14 +76,19 @@ export class CategoriasController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: PatchCategoriaDto,
   ) {
-    return this.categoriasService.partialUpdate(id, dto);
+    return this.categoriasService.partialUpdate(
+      id,
+      dto,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  delete(@Param('id', ParseIntPipe) id: number) {
+  delete(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
     return this.categoriasService.delete(id);
   }
 }
