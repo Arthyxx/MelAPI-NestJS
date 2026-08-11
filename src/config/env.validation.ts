@@ -77,5 +77,15 @@ export function validateEnvironment(
     );
   }
 
+  if (
+    validatedConfig.NODE_ENV ===
+      'production' &&
+    !validatedConfig.FRONTEND_URL
+  ) {
+    throw new Error(
+      'Configuração de ambiente inválida: FRONTEND_URL é obrigatória em produção.',
+    );
+  }
+
   return validatedConfig;
 }
