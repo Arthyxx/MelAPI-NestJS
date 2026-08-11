@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -228,8 +229,61 @@ export class ClientesService {
   async updateAdmin(
     id: number,
     dto: UpdateAdminClienteDto,
+    currentAdminId: number,
   ) {
-    await this.ensureClienteExists(id);
+    const cliente =
+      await this.prisma.cliente.findUnique({
+        where: {
+          id,
+        },
+        select: {
+          id: true,
+          role: true,
+          active: true,
+        },
+      });
+
+    if (!cliente) {
+      throw new NotFoundException(
+        'Cliente não encontrado.',
+      );
+    }
+
+    if (
+      id === currentAdminId &&
+      dto.active === false
+    ) {
+      throw new BadRequestException(
+        'Você não pode desativar a própria conta administrativa.',
+      );
+    }
+
+    if (
+      id === currentAdminId &&
+      dto.role === Role.CLIENTE
+    ) {
+      throw new BadRequestException(
+        'Você não pode remover o próprio perfil de administrador.',
+      );
+    }
+
+    const resultingRole =
+      dto.role ?? cliente.role;
+
+    const resultingActive =
+      dto.active ?? cliente.active;
+
+    const isRemovingActiveAdmin =
+      cliente.role === Role.ADMIN &&
+      cliente.active &&
+      (resultingRole !== Role.ADMIN ||
+        !resultingActive);
+
+    if (isRemovingActiveAdmin) {
+      await this.ensureAnotherActiveAdminExists(
+        id,
+      );
+    }
 
     const data: Prisma.ClienteUpdateInput =
       {};
@@ -465,7 +519,10 @@ export class ClientesService {
     });
   }
 
-  async delete(id: number): Promise<void> {
+  async delete(
+    id: number,
+    currentAdminId: number,
+  ): Promise<void> {
     const cliente =
       await this.prisma.cliente.findUnique({
         where: {
@@ -473,6 +530,8 @@ export class ClientesService {
         },
         select: {
           id: true,
+          role: true,
+          active: true,
           _count: {
             select: {
               pedidos: true,
@@ -484,6 +543,21 @@ export class ClientesService {
     if (!cliente) {
       throw new NotFoundException(
         'Cliente não encontrado.',
+      );
+    }
+
+    if (id === currentAdminId) {
+      throw new BadRequestException(
+        'Você não pode excluir a própria conta administrativa.',
+      );
+    }
+
+    if (
+      cliente.role === Role.ADMIN &&
+      cliente.active
+    ) {
+      await this.ensureAnotherActiveAdminExists(
+        id,
       );
     }
 
@@ -555,6 +629,27 @@ export class ClientesService {
     if (cliente) {
       throw new ConflictException(
         'Este e-mail já está em uso.',
+      );
+    }
+  }
+
+  private async ensureAnotherActiveAdminExists(
+    adminId: number,
+  ): Promise<void> {
+    const otherActiveAdmins =
+      await this.prisma.cliente.count({
+        where: {
+          id: {
+            not: adminId,
+          },
+          role: Role.ADMIN,
+          active: true,
+        },
+      });
+
+    if (otherActiveAdmins === 0) {
+      throw new ConflictException(
+        'A operação não pode ser realizada porque o sistema precisa manter pelo menos um administrador ativo.',
       );
     }
   }

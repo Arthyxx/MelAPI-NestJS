@@ -94,10 +94,12 @@ export class ClientesController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateAdminClienteDto,
+    @CurrentUser() user: AuthUser,
   ) {
     return this.clientesService.updateAdmin(
       id,
       dto,
+      user.sub,
     );
   }
 
@@ -107,10 +109,12 @@ export class ClientesController {
   partialUpdate(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateAdminClienteDto,
+    @CurrentUser() user: AuthUser,
   ) {
     return this.clientesService.updateAdmin(
       id,
       dto,
+      user.sub,
     );
   }
 
@@ -119,7 +123,11 @@ export class ClientesController {
   @Delete(':id')
   delete(
     @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.clientesService.delete(id);
+    return this.clientesService.delete(
+      id,
+      user.sub,
+    );
   }
 }
