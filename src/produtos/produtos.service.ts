@@ -12,9 +12,60 @@ import { PutProdutoDto } from './dto/put-produto.dto';
 
 @Injectable()
 export class ProdutosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+  ) {}
 
-  async findAll(filter: ProdutoFilterDto) {
+  async findAllPublic(
+    filter: ProdutoFilterDto,
+  ) {
+    const where: Prisma.ProdutoWhereInput = {
+      active: true,
+      category: {
+        active: true,
+      },
+    };
+
+    if (filter.name?.trim()) {
+      where.name = {
+        contains: filter.name.trim(),
+        mode: 'insensitive',
+      };
+    }
+
+    if (filter.categoryId !== undefined) {
+      where.categoryId = filter.categoryId;
+    }
+
+    const produtos =
+      await this.prisma.produto.findMany({
+        where,
+        orderBy: this.buildOrderBy(
+          filter.sort,
+        ),
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          avaliacoes: {
+            select: {
+              rating: true,
+            },
+          },
+        },
+      });
+
+    return produtos.map((produto) =>
+      this.toResponse(produto),
+    );
+  }
+
+  async findAllAdmin(
+    filter: ProdutoFilterDto,
+  ) {
     const where: Prisma.ProdutoWhereInput = {};
 
     if (filter.name?.trim()) {
@@ -32,33 +83,72 @@ export class ProdutosService {
       where.active = filter.active;
     }
 
-    const produtos = await this.prisma.produto.findMany({
-      where,
-      orderBy: this.buildOrderBy(filter.sort),
-      include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
+    const produtos =
+      await this.prisma.produto.findMany({
+        where,
+        orderBy: this.buildOrderBy(
+          filter.sort,
+        ),
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          avaliacoes: {
+            select: {
+              rating: true,
+            },
           },
         },
-        avaliacoes: {
-          select: {
-            rating: true,
-          },
-        },
-      },
-    });
+      });
 
     return produtos.map((produto) =>
       this.toResponse(produto),
     );
   }
 
-  async findById(id: number) {
+  async findByIdPublic(id: number) {
+    const produto =
+      await this.prisma.produto.findFirst({
+        where: {
+          id,
+          active: true,
+          category: {
+            active: true,
+          },
+        },
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          avaliacoes: {
+            select: {
+              rating: true,
+            },
+          },
+        },
+      });
+
+    if (!produto) {
+      throw new NotFoundException(
+        'Produto não encontrado.',
+      );
+    }
+
+    return this.toResponse(produto);
+  }
+
+  async findByIdAdmin(id: number) {
     const produto =
       await this.prisma.produto.findUnique({
-        where: { id },
+        where: {
+          id,
+        },
         include: {
           category: {
             select: {
@@ -87,6 +177,7 @@ export class ProdutosService {
     const name = dto.name.trim();
 
     await this.ensureNameIsAvailable(name);
+
     await this.ensureCategoriaIsActive(
       dto.categoryId,
     );
@@ -97,8 +188,11 @@ export class ProdutosService {
           name,
           description:
             dto.description?.trim() || null,
-          price: new Prisma.Decimal(dto.price),
-          stockQuantity: dto.stockQuantity,
+          price: new Prisma.Decimal(
+            dto.price,
+          ),
+          stockQuantity:
+            dto.stockQuantity,
           imageUrl:
             dto.imageUrl?.trim() || null,
           active: dto.active ?? true,
@@ -141,13 +235,18 @@ export class ProdutosService {
 
     const produto =
       await this.prisma.produto.update({
-        where: { id },
+        where: {
+          id,
+        },
         data: {
           name,
           description:
             dto.description?.trim() || null,
-          price: new Prisma.Decimal(dto.price),
-          stockQuantity: dto.stockQuantity,
+          price: new Prisma.Decimal(
+            dto.price,
+          ),
+          stockQuantity:
+            dto.stockQuantity,
           imageUrl:
             dto.imageUrl?.trim() || null,
           active: dto.active,
@@ -177,7 +276,8 @@ export class ProdutosService {
   ) {
     await this.ensureProdutoExists(id);
 
-    const data: Prisma.ProdutoUpdateInput = {};
+    const data: Prisma.ProdutoUpdateInput =
+      {};
 
     if (dto.name !== undefined) {
       const name = dto.name.trim();
@@ -229,7 +329,9 @@ export class ProdutosService {
 
     const produto =
       await this.prisma.produto.update({
-        where: { id },
+        where: {
+          id,
+        },
         data,
         include: {
           category: {
@@ -252,7 +354,9 @@ export class ProdutosService {
   async delete(id: number): Promise<void> {
     const produto =
       await this.prisma.produto.findUnique({
-        where: { id },
+        where: {
+          id,
+        },
         select: {
           id: true,
           _count: {
@@ -271,12 +375,15 @@ export class ProdutosService {
 
     if (produto._count.pedidoItems > 0) {
       await this.deactivateProduto(id);
+
       return;
     }
 
     try {
       await this.prisma.produto.delete({
-        where: { id },
+        where: {
+          id,
+        },
       });
     } catch (error) {
       if (
@@ -285,6 +392,7 @@ export class ProdutosService {
         error.code === 'P2003'
       ) {
         await this.deactivateProduto(id);
+
         return;
       }
 
@@ -296,7 +404,9 @@ export class ProdutosService {
     sort?: string,
   ): Prisma.ProdutoOrderByWithRelationInput {
     if (!sort) {
-      return { id: 'asc' };
+      return {
+        id: 'asc',
+      };
     }
 
     const [field, direction] =
@@ -314,7 +424,9 @@ export class ProdutosService {
       };
     }
 
-    return { id: 'asc' };
+    return {
+      id: 'asc',
+    };
   }
 
   private async ensureProdutoExists(
@@ -322,7 +434,9 @@ export class ProdutosService {
   ) {
     const produto =
       await this.prisma.produto.findUnique({
-        where: { id },
+        where: {
+          id,
+        },
         select: {
           id: true,
         },
@@ -345,7 +459,9 @@ export class ProdutosService {
           name,
           NOT:
             ignoreProdutoId !== undefined
-              ? { id: ignoreProdutoId }
+              ? {
+                  id: ignoreProdutoId,
+                }
               : undefined,
         },
         select: {
@@ -391,7 +507,9 @@ export class ProdutosService {
     id: number,
   ): Promise<void> {
     await this.prisma.produto.update({
-      where: { id },
+      where: {
+        id,
+      },
       data: {
         active: false,
       },
