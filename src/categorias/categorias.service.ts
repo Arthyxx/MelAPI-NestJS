@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CategoriaFilterDto } from './dto/categoria-filter.dto';
 import { CreateCategoriaDto } from './dto/create-categoria.dto';
 import { PatchCategoriaDto } from './dto/patch-categoria.dto';
 import { PutCategoriaDto } from './dto/put-categoria.dto';
@@ -26,12 +27,70 @@ export class CategoriasService {
     });
   }
 
-  async findAllAdmin() {
-    return this.prisma.categoria.findMany({
-      orderBy: {
-        id: 'asc',
+  async findAllAdmin(
+    filter: CategoriaFilterDto,
+  ) {
+    const page = filter.page ?? 1;
+    const limit = filter.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.CategoriaWhereInput = {};
+
+    if (filter.search?.trim()) {
+      const search = filter.search.trim();
+
+      where.OR = [
+        {
+          name: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          description: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+      ];
+    }
+
+    if (filter.active !== undefined) {
+      where.active = filter.active;
+    }
+
+    const [categorias, totalItems] =
+      await this.prisma.$transaction([
+        this.prisma.categoria.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: {
+            id: 'asc',
+          },
+        }),
+
+        this.prisma.categoria.count({
+          where,
+        }),
+      ]);
+
+    const totalPages = Math.max(
+      1,
+      Math.ceil(totalItems / limit),
+    );
+
+    return {
+      content: categorias,
+      pagination: {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
-    });
+    };
   }
 
   async findById(id: number) {

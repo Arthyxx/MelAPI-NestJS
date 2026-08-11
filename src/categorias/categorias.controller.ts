@@ -10,6 +10,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
@@ -19,6 +20,7 @@ import {
   RolesGuard,
 } from '../common/guards/roles.guard';
 import { CategoriasService } from './categorias.service';
+import { CategoriaFilterDto } from './dto/categoria-filter.dto';
 import { CreateCategoriaDto } from './dto/create-categoria.dto';
 import { PatchCategoriaDto } from './dto/patch-categoria.dto';
 import { PutCategoriaDto } from './dto/put-categoria.dto';
@@ -37,8 +39,12 @@ export class CategoriasController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Get('admin')
-  findAllAdmin() {
-    return this.categoriasService.findAllAdmin();
+  findAllAdmin(
+    @Query() filter: CategoriaFilterDto,
+  ) {
+    return this.categoriasService.findAllAdmin(
+      filter,
+    );
   }
 
   @Get(':id')
