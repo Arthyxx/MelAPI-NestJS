@@ -66,6 +66,10 @@ export class ProdutosService {
   async findAllAdmin(
     filter: ProdutoFilterDto,
   ) {
+    const page = filter.page ?? 1;
+    const limit = filter.limit ?? 10;
+    const skip = (page - 1) * limit;
+
     const where: Prisma.ProdutoWhereInput = {};
 
     if (filter.name?.trim()) {
@@ -83,30 +87,53 @@ export class ProdutosService {
       where.active = filter.active;
     }
 
-    const produtos =
-      await this.prisma.produto.findMany({
-        where,
-        orderBy: this.buildOrderBy(
-          filter.sort,
-        ),
-        include: {
-          category: {
-            select: {
-              id: true,
-              name: true,
+    const [produtos, totalItems] =
+      await this.prisma.$transaction([
+        this.prisma.produto.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: this.buildOrderBy(
+            filter.sort,
+          ),
+          include: {
+            category: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            avaliacoes: {
+              select: {
+                rating: true,
+              },
             },
           },
-          avaliacoes: {
-            select: {
-              rating: true,
-            },
-          },
-        },
-      });
+        }),
 
-    return produtos.map((produto) =>
-      this.toResponse(produto),
+        this.prisma.produto.count({
+          where,
+        }),
+      ]);
+
+    const totalPages = Math.max(
+      1,
+      Math.ceil(totalItems / limit),
     );
+
+    return {
+      content: produtos.map((produto) =>
+        this.toResponse(produto),
+      ),
+      pagination: {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
   }
 
   async findByIdPublic(id: number) {
@@ -375,7 +402,6 @@ export class ProdutosService {
 
     if (produto._count.pedidoItems > 0) {
       await this.deactivateProduto(id);
-
       return;
     }
 
@@ -392,7 +418,6 @@ export class ProdutosService {
         error.code === 'P2003'
       ) {
         await this.deactivateProduto(id);
-
         return;
       }
 
@@ -548,7 +573,8 @@ export class ProdutosService {
     return {
       id: produto.id,
       name: produto.name,
-      description: produto.description,
+      description:
+        produto.description,
       price: Number(produto.price),
       stockQuantity:
         produto.stockQuantity,
@@ -557,8 +583,10 @@ export class ProdutosService {
       category: produto.category,
       averageRating,
       reviewsCount,
-      createdAt: produto.createdAt,
-      updatedAt: produto.updatedAt,
+      createdAt:
+        produto.createdAt,
+      updatedAt:
+        produto.updatedAt,
     };
   }
 }
