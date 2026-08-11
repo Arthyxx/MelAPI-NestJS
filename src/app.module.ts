@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module';
 import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
 import { CategoriasModule } from './categorias/categorias.module';
 import { ClientesModule } from './clientes/clientes.module';
+import { validateEnvironment } from './config/env.validation';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { PedidosModule } from './pedidos/pedidos.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -19,6 +20,7 @@ import { ProdutosModule } from './produtos/produtos.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      validate: validateEnvironment,
     }),
 
     ThrottlerModule.forRoot([
