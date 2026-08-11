@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+
 import { AuthModule } from './auth/auth.module';
+import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
 import { CategoriasModule } from './categorias/categorias.module';
 import { ClientesModule } from './clientes/clientes.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { PedidosModule } from './pedidos/pedidos.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProdutosModule } from './produtos/produtos.module';
-import { PedidosModule } from './pedidos/pedidos.module';
-import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
 
 @Module({
   imports: [
@@ -20,6 +22,7 @@ import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
     ProdutosModule,
     PedidosModule,
     AvaliacoesModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}
