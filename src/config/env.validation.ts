@@ -6,6 +6,7 @@ import {
   IsString,
   Max,
   Min,
+  MinLength,
   validateSync,
 } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
@@ -25,6 +26,10 @@ class EnvironmentVariables {
 
   @IsString()
   @IsNotEmpty()
+  @MinLength(32, {
+    message:
+      'JWT_SECRET deve ter pelo menos 32 caracteres.',
+  })
   JWT_SECRET!: string;
 
   @IsString()

@@ -3,14 +3,16 @@ import 'reflect-metadata';
 import { validateEnvironment } from './env.validation';
 
 describe('validateEnvironment', () => {
+  const jwtSecret =
+    'segredo-de-teste-com-mais-de-32-caracteres';
+
   it('deve aceitar uma configuração válida de desenvolvimento', () => {
     const result =
       validateEnvironment({
         NODE_ENV: 'development',
         DATABASE_URL:
           'postgresql://usuario:senha@localhost:5432/mel',
-        JWT_SECRET:
-          'segredo-de-teste',
+        JWT_SECRET: jwtSecret,
         JWT_EXPIRES_IN: '1h',
         PORT: '3000',
         FRONTEND_URL:
@@ -28,12 +30,25 @@ describe('validateEnvironment', () => {
     expect(() =>
       validateEnvironment({
         NODE_ENV: 'development',
-        JWT_SECRET:
-          'segredo-de-teste',
+        JWT_SECRET: jwtSecret,
         JWT_EXPIRES_IN: '1h',
       }),
     ).toThrow(
       'Configuração de ambiente inválida',
+    );
+  });
+
+  it('deve rejeitar JWT_SECRET com menos de 32 caracteres', () => {
+    expect(() =>
+      validateEnvironment({
+        NODE_ENV: 'development',
+        DATABASE_URL:
+          'postgresql://teste',
+        JWT_SECRET: 'segredo-curto',
+        JWT_EXPIRES_IN: '1h',
+      }),
+    ).toThrow(
+      'JWT_SECRET deve ter pelo menos 32 caracteres.',
     );
   });
 
@@ -43,8 +58,7 @@ describe('validateEnvironment', () => {
         NODE_ENV: 'development',
         DATABASE_URL:
           'postgresql://teste',
-        JWT_SECRET:
-          'segredo-de-teste',
+        JWT_SECRET: jwtSecret,
         JWT_EXPIRES_IN: '1h',
         PORT: '70000',
       }),
@@ -59,8 +73,7 @@ describe('validateEnvironment', () => {
         NODE_ENV: 'production',
         DATABASE_URL:
           'postgresql://teste',
-        JWT_SECRET:
-          'segredo-de-teste',
+        JWT_SECRET: jwtSecret,
         JWT_EXPIRES_IN: '1h',
       }),
     ).toThrow(
@@ -74,8 +87,7 @@ describe('validateEnvironment', () => {
         NODE_ENV: 'production',
         DATABASE_URL:
           'postgresql://teste',
-        JWT_SECRET:
-          'segredo-de-teste',
+        JWT_SECRET: jwtSecret,
         JWT_EXPIRES_IN: '1h',
         FRONTEND_URL:
           'https://loja.exemplo.com',
