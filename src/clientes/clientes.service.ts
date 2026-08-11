@@ -10,6 +10,7 @@ import {
   CreateAdminClienteDto,
   UpdateAdminClienteDto,
 } from './dto/admin-cliente.dto';
+import { ClienteFilterDto } from './dto/cliente-filter.dto';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { PatchClienteDto } from './dto/patch-cliente.dto';
 
@@ -19,13 +20,85 @@ export class ClientesService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async findAll() {
-    return this.prisma.cliente.findMany({
-      orderBy: {
-        id: 'asc',
+  async findAll(filter: ClienteFilterDto) {
+    const page = filter.page ?? 1;
+    const limit = filter.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.ClienteWhereInput = {};
+
+    const search = filter.search?.trim();
+
+    if (search) {
+      where.OR = [
+        {
+          name: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          email: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          phone: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          city: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+      ];
+    }
+
+    if (filter.role !== undefined) {
+      where.role = filter.role;
+    }
+
+    if (filter.active !== undefined) {
+      where.active = filter.active;
+    }
+
+    const [clientes, totalItems] =
+      await this.prisma.$transaction([
+        this.prisma.cliente.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: {
+            id: 'asc',
+          },
+          select: this.defaultSelect(),
+        }),
+
+        this.prisma.cliente.count({
+          where,
+        }),
+      ]);
+
+    const totalPages = Math.max(
+      1,
+      Math.ceil(totalItems / limit),
+    );
+
+    return {
+      content: clientes,
+      pagination: {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
-      select: this.defaultSelect(),
-    });
+    };
   }
 
   async findById(id: number) {
