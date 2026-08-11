@@ -62,34 +62,36 @@ async function bootstrap() {
     new HttpExceptionFilter(),
   );
 
-  const config =
-    new DocumentBuilder()
-      .setTitle('API Mel')
-      .setDescription(
-        'API para gerenciamento de produtos, clientes e pedidos',
-      )
-      .setVersion('1.0')
-      .addBearerAuth(
-        {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
-        },
-        'Authorization',
-      )
-      .build();
+  if (!isProduction) {
+    const config =
+      new DocumentBuilder()
+        .setTitle('API Mel')
+        .setDescription(
+          'API para gerenciamento de produtos, clientes e pedidos',
+        )
+        .setVersion('1.0')
+        .addBearerAuth(
+          {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+          },
+          'Authorization',
+        )
+        .build();
 
-  const document =
-    SwaggerModule.createDocument(
+    const document =
+      SwaggerModule.createDocument(
+        app,
+        config,
+      );
+
+    SwaggerModule.setup(
+      'api/docs',
       app,
-      config,
+      document,
     );
-
-  SwaggerModule.setup(
-    'api/docs',
-    app,
-    document,
-  );
+  }
 
   const port =
     configService.get<number>(
@@ -102,9 +104,11 @@ async function bootstrap() {
     `API rodando em http://localhost:${port}/api`,
   );
 
-  console.log(
-    `Swagger disponível em http://localhost:${port}/api/docs`,
-  );
+  if (!isProduction) {
+    console.log(
+      `Swagger disponível em http://localhost:${port}/api/docs`,
+    );
+  }
 }
 
 void bootstrap();
