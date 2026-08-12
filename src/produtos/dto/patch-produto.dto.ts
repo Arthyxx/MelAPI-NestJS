@@ -1,6 +1,8 @@
+import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -9,7 +11,6 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 
 export class PatchProdutoDto {
   @IsOptional()
@@ -38,6 +39,12 @@ export class PatchProdutoDto {
   @IsUrl()
   @MaxLength(500)
   imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  imagePublicId?: string;
 
   @IsOptional()
   @Type(() => Number)

@@ -1,3 +1,4 @@
+import { plainToInstance } from 'class-transformer';
 import {
   IsIn,
   IsInt,
@@ -9,7 +10,6 @@ import {
   MinLength,
   validateSync,
 } from 'class-validator';
-import { plainToInstance } from 'class-transformer';
 
 class EnvironmentVariables {
   @IsOptional()
@@ -46,6 +46,18 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   FRONTEND_URL?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  CLOUDINARY_CLOUD_NAME!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  CLOUDINARY_API_KEY!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  CLOUDINARY_API_SECRET!: string;
 }
 
 export function validateEnvironment(

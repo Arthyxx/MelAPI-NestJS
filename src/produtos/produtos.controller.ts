@@ -6,14 +6,21 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseFilePipeBuilder,
   ParseIntPipe,
   Patch,
   Post,
   Put,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Role } from '@prisma/client';
+import type { Express } from 'express';
+
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import {
   Roles,
@@ -29,6 +36,7 @@ import { ProdutosService } from './produtos.service';
 export class ProdutosController {
   constructor(
     private readonly produtosService: ProdutosService,
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   @Get()
@@ -73,10 +81,51 @@ export class ProdutosController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
+  @Post('upload-image')
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(
+    FileInterceptor('file'),
+  )
+  async uploadImage(
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType:
+            /(jpeg|jpg|png|webp)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize:
+            5 * 1024 * 1024,
+        })
+        .build({
+          errorHttpStatusCode:
+            HttpStatus.UNPROCESSABLE_ENTITY,
+        }),
+    )
+    file: Express.Multer.File,
+  ) {
+    const result =
+      await this.cloudinaryService.uploadImage(
+        file,
+      );
+
+    return {
+      imageUrl: result.secure_url,
+      imagePublicId:
+        result.public_id,
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() dto: CreateProdutoDto) {
-    return this.produtosService.create(dto);
+  create(
+    @Body() dto: CreateProdutoDto,
+  ) {
+    return this.produtosService.create(
+      dto,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -112,6 +161,8 @@ export class ProdutosController {
   delete(
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.produtosService.delete(id);
+    return this.produtosService.delete(
+      id,
+    );
   }
 }

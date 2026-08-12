@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
@@ -10,7 +11,6 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 
 export class PutProdutoDto {
   @IsString()
@@ -37,6 +37,12 @@ export class PutProdutoDto {
   @IsUrl()
   @MaxLength(500)
   imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  imagePublicId?: string;
 
   @Type(() => Number)
   @IsInt()

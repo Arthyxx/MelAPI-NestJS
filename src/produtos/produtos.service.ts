@@ -1,9 +1,12 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { PatchProdutoDto } from './dto/patch-produto.dto';
@@ -12,8 +15,13 @@ import { PutProdutoDto } from './dto/put-produto.dto';
 
 @Injectable()
 export class ProdutosService {
+  private readonly logger = new Logger(
+    ProdutosService.name,
+  );
+
   constructor(
     private readonly prisma: PrismaService,
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   async findAllPublic(
@@ -222,6 +230,9 @@ export class ProdutosService {
             dto.stockQuantity,
           imageUrl:
             dto.imageUrl?.trim() || null,
+          imagePublicId:
+            dto.imagePublicId?.trim() ||
+            null,
           active: dto.active ?? true,
           categoryId: dto.categoryId,
         },
@@ -247,7 +258,8 @@ export class ProdutosService {
     id: number,
     dto: PutProdutoDto,
   ) {
-    await this.ensureProdutoExists(id);
+    const produtoAtual =
+      await this.ensureProdutoExists(id);
 
     const name = dto.name.trim();
 
@@ -259,6 +271,9 @@ export class ProdutosService {
     await this.ensureCategoriaIsActive(
       dto.categoryId,
     );
+
+    const novoImagePublicId =
+      dto.imagePublicId?.trim() || null;
 
     const produto =
       await this.prisma.produto.update({
@@ -276,6 +291,8 @@ export class ProdutosService {
             dto.stockQuantity,
           imageUrl:
             dto.imageUrl?.trim() || null,
+          imagePublicId:
+            novoImagePublicId,
           active: dto.active,
           categoryId: dto.categoryId,
         },
@@ -294,6 +311,11 @@ export class ProdutosService {
         },
       });
 
+    await this.cleanupReplacedImage(
+      produtoAtual.imagePublicId,
+      novoImagePublicId,
+    );
+
     return this.toResponse(produto);
   }
 
@@ -301,10 +323,14 @@ export class ProdutosService {
     id: number,
     dto: PatchProdutoDto,
   ) {
-    await this.ensureProdutoExists(id);
+    const produtoAtual =
+      await this.ensureProdutoExists(id);
 
     const data: Prisma.ProdutoUpdateInput =
       {};
+
+    let novoImagePublicId =
+      produtoAtual.imagePublicId;
 
     if (dto.name !== undefined) {
       const name = dto.name.trim();
@@ -336,6 +362,22 @@ export class ProdutosService {
     if (dto.imageUrl !== undefined) {
       data.imageUrl =
         dto.imageUrl.trim() || null;
+
+      novoImagePublicId =
+        dto.imagePublicId?.trim() ||
+        null;
+
+      data.imagePublicId =
+        novoImagePublicId;
+    } else if (
+      dto.imagePublicId !== undefined
+    ) {
+      novoImagePublicId =
+        dto.imagePublicId.trim() ||
+        null;
+
+      data.imagePublicId =
+        novoImagePublicId;
     }
 
     if (dto.active !== undefined) {
@@ -375,6 +417,11 @@ export class ProdutosService {
         },
       });
 
+    await this.cleanupReplacedImage(
+      produtoAtual.imagePublicId,
+      novoImagePublicId,
+    );
+
     return this.toResponse(produto);
   }
 
@@ -386,6 +433,7 @@ export class ProdutosService {
         },
         select: {
           id: true,
+          imagePublicId: true,
           _count: {
             select: {
               pedidoItems: true,
@@ -411,6 +459,10 @@ export class ProdutosService {
           id,
         },
       });
+
+      await this.cleanupImage(
+        produto.imagePublicId,
+      );
     } catch (error) {
       if (
         error instanceof
@@ -464,6 +516,7 @@ export class ProdutosService {
         },
         select: {
           id: true,
+          imagePublicId: true,
         },
       });
 
@@ -472,6 +525,8 @@ export class ProdutosService {
         'Produto não encontrado.',
       );
     }
+
+    return produto;
   }
 
   private async ensureNameIsAvailable(
@@ -541,6 +596,43 @@ export class ProdutosService {
     });
   }
 
+  private async cleanupReplacedImage(
+    oldPublicId: string | null,
+    newPublicId: string | null,
+  ): Promise<void> {
+    if (
+      !oldPublicId ||
+      oldPublicId === newPublicId
+    ) {
+      return;
+    }
+
+    await this.cleanupImage(
+      oldPublicId,
+    );
+  }
+
+  private async cleanupImage(
+    publicId: string | null,
+  ): Promise<void> {
+    if (!publicId) {
+      return;
+    }
+
+    try {
+      await this.cloudinaryService.deleteImage(
+        publicId,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Não foi possível remover a imagem "${publicId}" da Cloudinary.`,
+        error instanceof Error
+          ? error.message
+          : undefined,
+      );
+    }
+  }
+
   private toResponse(
     produto: Prisma.ProdutoGetPayload<{
       include: {
@@ -579,6 +671,8 @@ export class ProdutosService {
       stockQuantity:
         produto.stockQuantity,
       imageUrl: produto.imageUrl,
+      imagePublicId:
+        produto.imagePublicId,
       active: produto.active,
       category: produto.category,
       averageRating,

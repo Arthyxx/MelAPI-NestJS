@@ -4,49 +4,91 @@ import { validateEnvironment } from './env.validation';
 
 describe('validateEnvironment', () => {
   const jwtSecret =
-    'segredo-de-teste-com-mais-de-32-caracteres';
+    '12345678901234567890123456789012';
+
+  function createValidConfig(
+    overrides: Record<string, unknown> = {},
+  ) {
+    return {
+      NODE_ENV: 'development',
+      DATABASE_URL:
+        'postgresql://user:password@localhost:5432/mel_api',
+      JWT_SECRET: jwtSecret,
+      JWT_EXPIRES_IN: '1h',
+      PORT: 3000,
+      CLOUDINARY_CLOUD_NAME:
+        'mel-api-cloud',
+      CLOUDINARY_API_KEY:
+        '123456789012345',
+      CLOUDINARY_API_SECRET:
+        'cloudinary-api-secret-example',
+      ...overrides,
+    };
+  }
 
   it('deve aceitar uma configuração válida de desenvolvimento', () => {
     const result =
-      validateEnvironment({
-        NODE_ENV: 'development',
-        DATABASE_URL:
-          'postgresql://usuario:senha@localhost:5432/mel',
-        JWT_SECRET: jwtSecret,
-        JWT_EXPIRES_IN: '1h',
-        PORT: '3000',
-        FRONTEND_URL:
-          'http://localhost:5173',
-      });
+      validateEnvironment(
+        createValidConfig(),
+      );
 
     expect(result.NODE_ENV).toBe(
       'development',
     );
 
+    expect(result.DATABASE_URL).toBe(
+      'postgresql://user:password@localhost:5432/mel_api',
+    );
+
+    expect(result.JWT_SECRET).toBe(
+      jwtSecret,
+    );
+
+    expect(
+      result.JWT_EXPIRES_IN,
+    ).toBe('1h');
+
     expect(result.PORT).toBe(3000);
+
+    expect(
+      result.CLOUDINARY_CLOUD_NAME,
+    ).toBe(
+      'mel-api-cloud',
+    );
+
+    expect(
+      result.CLOUDINARY_API_KEY,
+    ).toBe(
+      '123456789012345',
+    );
+
+    expect(
+      result.CLOUDINARY_API_SECRET,
+    ).toBe(
+      'cloudinary-api-secret-example',
+    );
   });
 
   it('deve rejeitar configuração sem DATABASE_URL', () => {
     expect(() =>
-      validateEnvironment({
-        NODE_ENV: 'development',
-        JWT_SECRET: jwtSecret,
-        JWT_EXPIRES_IN: '1h',
-      }),
+      validateEnvironment(
+        createValidConfig({
+          DATABASE_URL: '',
+        }),
+      ),
     ).toThrow(
-      'Configuração de ambiente inválida',
+      'Configuração de ambiente inválida:',
     );
   });
 
   it('deve rejeitar JWT_SECRET com menos de 32 caracteres', () => {
     expect(() =>
-      validateEnvironment({
-        NODE_ENV: 'development',
-        DATABASE_URL:
-          'postgresql://teste',
-        JWT_SECRET: 'segredo-curto',
-        JWT_EXPIRES_IN: '1h',
-      }),
+      validateEnvironment(
+        createValidConfig({
+          JWT_SECRET:
+            'segredo-curto',
+        }),
+      ),
     ).toThrow(
       'JWT_SECRET deve ter pelo menos 32 caracteres.',
     );
@@ -54,28 +96,24 @@ describe('validateEnvironment', () => {
 
   it('deve rejeitar uma porta inválida', () => {
     expect(() =>
-      validateEnvironment({
-        NODE_ENV: 'development',
-        DATABASE_URL:
-          'postgresql://teste',
-        JWT_SECRET: jwtSecret,
-        JWT_EXPIRES_IN: '1h',
-        PORT: '70000',
-      }),
+      validateEnvironment(
+        createValidConfig({
+          PORT: 70000,
+        }),
+      ),
     ).toThrow(
-      'Configuração de ambiente inválida',
+      'Configuração de ambiente inválida:',
     );
   });
 
   it('deve exigir FRONTEND_URL em produção', () => {
     expect(() =>
-      validateEnvironment({
-        NODE_ENV: 'production',
-        DATABASE_URL:
-          'postgresql://teste',
-        JWT_SECRET: jwtSecret,
-        JWT_EXPIRES_IN: '1h',
-      }),
+      validateEnvironment(
+        createValidConfig({
+          NODE_ENV:
+            'production',
+        }),
+      ),
     ).toThrow(
       'FRONTEND_URL é obrigatória em produção.',
     );
@@ -83,22 +121,62 @@ describe('validateEnvironment', () => {
 
   it('deve aceitar produção quando FRONTEND_URL estiver configurada', () => {
     const result =
-      validateEnvironment({
-        NODE_ENV: 'production',
-        DATABASE_URL:
-          'postgresql://teste',
-        JWT_SECRET: jwtSecret,
-        JWT_EXPIRES_IN: '1h',
-        FRONTEND_URL:
-          'https://loja.exemplo.com',
-      });
+      validateEnvironment(
+        createValidConfig({
+          NODE_ENV:
+            'production',
+          FRONTEND_URL:
+            'https://mel-frontend.vercel.app',
+        }),
+      );
 
     expect(result.NODE_ENV).toBe(
       'production',
     );
 
-    expect(result.FRONTEND_URL).toBe(
-      'https://loja.exemplo.com',
+    expect(
+      result.FRONTEND_URL,
+    ).toBe(
+      'https://mel-frontend.vercel.app',
+    );
+  });
+
+  it('deve rejeitar configuração sem CLOUDINARY_CLOUD_NAME', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidConfig({
+          CLOUDINARY_CLOUD_NAME:
+            '',
+        }),
+      ),
+    ).toThrow(
+      'Configuração de ambiente inválida:',
+    );
+  });
+
+  it('deve rejeitar configuração sem CLOUDINARY_API_KEY', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidConfig({
+          CLOUDINARY_API_KEY:
+            '',
+        }),
+      ),
+    ).toThrow(
+      'Configuração de ambiente inválida:',
+    );
+  });
+
+  it('deve rejeitar configuração sem CLOUDINARY_API_SECRET', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidConfig({
+          CLOUDINARY_API_SECRET:
+            '',
+        }),
+      ),
+    ).toThrow(
+      'Configuração de ambiente inválida:',
     );
   });
 });

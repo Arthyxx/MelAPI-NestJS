@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module';
 import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
 import { CategoriasModule } from './categorias/categorias.module';
 import { ClientesModule } from './clientes/clientes.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { validateEnvironment } from './config/env.validation';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { PedidosModule } from './pedidos/pedidos.module';
@@ -31,6 +32,7 @@ import { ProdutosModule } from './produtos/produtos.module';
     ]),
 
     PrismaModule,
+    CloudinaryModule,
     AuthModule,
     ClientesModule,
     CategoriasModule,

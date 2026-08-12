@@ -3,6 +3,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutoFilterDto } from './dto/produto-filter.dto';
 import { ProdutosService } from './produtos.service';
@@ -26,6 +27,10 @@ describe('ProdutosService', () => {
     $transaction: jest.Mock;
   };
 
+  let cloudinaryService: {
+    deleteImage: jest.Mock;
+  };
+
   beforeEach(() => {
     prisma = {
       produto: {
@@ -45,8 +50,13 @@ describe('ProdutosService', () => {
       $transaction: jest.fn(),
     };
 
+    cloudinaryService = {
+      deleteImage: jest.fn(),
+    };
+
     service = new ProdutosService(
       prisma as unknown as PrismaService,
+      cloudinaryService as unknown as CloudinaryService,
     );
   });
 
@@ -88,6 +98,7 @@ describe('ProdutosService', () => {
   it('deve impedir alteração para uma categoria inativa', async () => {
     prisma.produto.findUnique.mockResolvedValue({
       id: 10,
+      imagePublicId: null,
     });
 
     prisma.categoria.findUnique.mockResolvedValue({
@@ -113,6 +124,8 @@ describe('ProdutosService', () => {
   it('deve desativar produto com histórico de pedidos em vez de excluir', async () => {
     prisma.produto.findUnique.mockResolvedValue({
       id: 10,
+      imagePublicId:
+        'mel-api/produtos/imagem-antiga',
       _count: {
         pedidoItems: 3,
       },
@@ -143,11 +156,16 @@ describe('ProdutosService', () => {
     expect(
       prisma.produto.delete,
     ).not.toHaveBeenCalled();
+
+    expect(
+      cloudinaryService.deleteImage,
+    ).not.toHaveBeenCalled();
   });
 
   it('deve excluir definitivamente produto sem histórico de pedidos', async () => {
     prisma.produto.findUnique.mockResolvedValue({
       id: 10,
+      imagePublicId: null,
       _count: {
         pedidoItems: 0,
       },
@@ -176,6 +194,37 @@ describe('ProdutosService', () => {
     ).not.toHaveBeenCalled();
   });
 
+  it('deve remover imagem da Cloudinary ao excluir definitivamente um produto', async () => {
+    prisma.produto.findUnique.mockResolvedValue({
+      id: 10,
+      imagePublicId:
+        'mel-api/produtos/mel-teste',
+      _count: {
+        pedidoItems: 0,
+      },
+    });
+
+    prisma.produto.delete.mockResolvedValue({
+      id: 10,
+    });
+
+    cloudinaryService.deleteImage.mockResolvedValue(
+      undefined,
+    );
+
+    await service.delete(10);
+
+    expect(
+      cloudinaryService.deleteImage,
+    ).toHaveBeenCalledTimes(1);
+
+    expect(
+      cloudinaryService.deleteImage,
+    ).toHaveBeenCalledWith(
+      'mel-api/produtos/mel-teste',
+    );
+  });
+
   it('deve rejeitar exclusão de produto inexistente', async () => {
     prisma.produto.findUnique.mockResolvedValue(
       null,
@@ -195,6 +244,10 @@ describe('ProdutosService', () => {
 
     expect(
       prisma.produto.update,
+    ).not.toHaveBeenCalled();
+
+    expect(
+      cloudinaryService.deleteImage,
     ).not.toHaveBeenCalled();
   });
 

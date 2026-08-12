@@ -2,6 +2,8 @@ import {
   Test,
   TestingModule,
 } from '@nestjs/testing';
+
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { ProdutosController } from './produtos.controller';
 import { ProdutosService } from './produtos.service';
 
@@ -18,6 +20,13 @@ describe('ProdutosController', () => {
           {
             provide: ProdutosService,
             useValue: {},
+          },
+          {
+            provide: CloudinaryService,
+            useValue: {
+              uploadImage: jest.fn(),
+              deleteImage: jest.fn(),
+            },
           },
         ],
       }).compile();
