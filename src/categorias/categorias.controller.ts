@@ -15,10 +15,7 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import {
-  Roles,
-  RolesGuard,
-} from '../common/guards/roles.guard';
+import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import { CategoriasService } from './categorias.service';
 import { CategoriaFilterDto } from './dto/categoria-filter.dto';
 import { CreateCategoriaDto } from './dto/create-categoria.dto';
@@ -27,9 +24,7 @@ import { PutCategoriaDto } from './dto/put-categoria.dto';
 
 @Controller('categorias')
 export class CategoriasController {
-  constructor(
-    private readonly categoriasService: CategoriasService,
-  ) {}
+  constructor(private readonly categoriasService: CategoriasService) {}
 
   @Get()
   findAllActive() {
@@ -39,18 +34,12 @@ export class CategoriasController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Get('admin')
-  findAllAdmin(
-    @Query() filter: CategoriaFilterDto,
-  ) {
-    return this.categoriasService.findAllAdmin(
-      filter,
-    );
+  findAllAdmin(@Query() filter: CategoriaFilterDto) {
+    return this.categoriasService.findAllAdmin(filter);
   }
 
   @Get(':id')
-  findById(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  findById(@Param('id', ParseIntPipe) id: number) {
     return this.categoriasService.findById(id);
   }
 
@@ -65,14 +54,8 @@ export class CategoriasController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Put(':id')
-  update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: PutCategoriaDto,
-  ) {
-    return this.categoriasService.update(
-      id,
-      dto,
-    );
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: PutCategoriaDto) {
+    return this.categoriasService.update(id, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -82,19 +65,14 @@ export class CategoriasController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: PatchCategoriaDto,
   ) {
-    return this.categoriasService.partialUpdate(
-      id,
-      dto,
-    );
+    return this.categoriasService.partialUpdate(id, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  delete(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  delete(@Param('id', ParseIntPipe) id: number) {
     return this.categoriasService.delete(id);
   }
 }

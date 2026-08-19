@@ -1,7 +1,4 @@
-import {
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Logger, NotFoundException } from '@nestjs/common';
 
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -65,9 +62,7 @@ describe('ProdutosService', () => {
   });
 
   it('deve impedir criação de produto em categoria inativa', async () => {
-    prisma.produto.findFirst.mockResolvedValue(
-      null,
-    );
+    prisma.produto.findFirst.mockResolvedValue(null);
 
     prisma.categoria.findUnique.mockResolvedValue({
       id: 1,
@@ -82,17 +77,170 @@ describe('ProdutosService', () => {
       active: true,
     };
 
-    await expect(
-      service.create(dto),
-    ).rejects.toThrow(
+    await expect(service.create(dto)).rejects.toThrow(
       new ConflictException(
         'Não é possível vincular produto a uma categoria inativa.',
       ),
     );
 
-    expect(
-      prisma.produto.create,
-    ).not.toHaveBeenCalled();
+    expect(prisma.produto.create).not.toHaveBeenCalled();
+  });
+
+  it('deve remover imagem órfã quando a criação do produto falhar', async () => {
+    prisma.produto.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+
+    prisma.categoria.findUnique.mockResolvedValue({
+      id: 1,
+      active: false,
+    });
+
+    cloudinaryService.deleteImage.mockResolvedValue(undefined);
+
+    const dto = {
+      name: 'Mel com Imagem',
+      price: 35,
+      stockQuantity: 10,
+      categoryId: 1,
+      active: true,
+      imageUrl: 'https://res.cloudinary.com/test/image/upload/mel.jpg',
+      imagePublicId: 'mel-api/produtos/upload-orfao',
+    };
+
+    await expect(service.create(dto)).rejects.toThrow(
+      new ConflictException(
+        'Não é possível vincular produto a uma categoria inativa.',
+      ),
+    );
+
+    expect(prisma.produto.findFirst).toHaveBeenLastCalledWith({
+      where: {
+        imagePublicId: 'mel-api/produtos/upload-orfao',
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    expect(cloudinaryService.deleteImage).toHaveBeenCalledTimes(1);
+
+    expect(cloudinaryService.deleteImage).toHaveBeenCalledWith(
+      'mel-api/produtos/upload-orfao',
+    );
+  });
+
+  it('não deve remover imagem quando ela já estiver vinculada a um produto', async () => {
+    prisma.produto.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: 20,
+    });
+
+    prisma.categoria.findUnique.mockResolvedValue({
+      id: 1,
+      active: false,
+    });
+
+    const dto = {
+      name: 'Mel Teste',
+      price: 35,
+      stockQuantity: 10,
+      categoryId: 1,
+      active: true,
+      imageUrl: 'https://res.cloudinary.com/test/image/upload/mel.jpg',
+      imagePublicId: 'mel-api/produtos/imagem-em-uso',
+    };
+
+    await expect(service.create(dto)).rejects.toThrow(
+      new ConflictException(
+        'Não é possível vincular produto a uma categoria inativa.',
+      ),
+    );
+
+    expect(cloudinaryService.deleteImage).not.toHaveBeenCalled();
+  });
+
+  it('deve remover nova imagem órfã quando a atualização do produto falhar', async () => {
+    prisma.produto.findUnique.mockResolvedValue({
+      id: 10,
+      imagePublicId: 'mel-api/produtos/imagem-antiga',
+    });
+
+    prisma.produto.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+
+    prisma.categoria.findUnique.mockResolvedValue({
+      id: 1,
+      active: true,
+    });
+
+    prisma.produto.update.mockRejectedValue(
+      new Error('Falha ao atualizar produto.'),
+    );
+
+    cloudinaryService.deleteImage.mockResolvedValue(undefined);
+
+    const dto = {
+      name: 'Mel Atualizado',
+      description: 'Descrição',
+      price: 40,
+      stockQuantity: 15,
+      categoryId: 1,
+      active: true,
+      imageUrl: 'https://res.cloudinary.com/test/image/upload/nova.jpg',
+      imagePublicId: 'mel-api/produtos/imagem-nova',
+    };
+
+    await expect(service.update(10, dto)).rejects.toThrow(
+      'Falha ao atualizar produto.',
+    );
+
+    expect(cloudinaryService.deleteImage).toHaveBeenCalledTimes(1);
+
+    expect(cloudinaryService.deleteImage).toHaveBeenCalledWith(
+      'mel-api/produtos/imagem-nova',
+    );
+
+    expect(cloudinaryService.deleteImage).not.toHaveBeenCalledWith(
+      'mel-api/produtos/imagem-antiga',
+    );
+  });
+
+  it('não deve apagar imagem se não conseguir verificar se ela está vinculada', async () => {
+    const loggerWarnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+
+    prisma.produto.findFirst
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(new Error('Falha ao consultar vínculo.'));
+
+    prisma.categoria.findUnique.mockResolvedValue({
+      id: 1,
+      active: false,
+    });
+
+    const dto = {
+      name: 'Mel Teste',
+      price: 35,
+      stockQuantity: 10,
+      categoryId: 1,
+      active: true,
+      imageUrl: 'https://res.cloudinary.com/test/image/upload/mel.jpg',
+      imagePublicId: 'mel-api/produtos/imagem-duvidosa',
+    };
+
+    await expect(service.create(dto)).rejects.toThrow(
+      new ConflictException(
+        'Não é possível vincular produto a uma categoria inativa.',
+      ),
+    );
+
+    expect(cloudinaryService.deleteImage).not.toHaveBeenCalled();
+
+    expect(loggerWarnSpy).toHaveBeenCalled();
+
+    loggerWarnSpy.mockRestore();
   });
 
   it('deve impedir alteração para uma categoria inativa', async () => {
@@ -116,16 +264,13 @@ describe('ProdutosService', () => {
       ),
     );
 
-    expect(
-      prisma.produto.update,
-    ).not.toHaveBeenCalled();
+    expect(prisma.produto.update).not.toHaveBeenCalled();
   });
 
   it('deve desativar produto com histórico de pedidos em vez de excluir', async () => {
     prisma.produto.findUnique.mockResolvedValue({
       id: 10,
-      imagePublicId:
-        'mel-api/produtos/imagem-antiga',
+      imagePublicId: 'mel-api/produtos/imagem-antiga',
       _count: {
         pedidoItems: 3,
       },
@@ -138,13 +283,9 @@ describe('ProdutosService', () => {
 
     await service.delete(10);
 
-    expect(
-      prisma.produto.update,
-    ).toHaveBeenCalledTimes(1);
+    expect(prisma.produto.update).toHaveBeenCalledTimes(1);
 
-    expect(
-      prisma.produto.update,
-    ).toHaveBeenCalledWith({
+    expect(prisma.produto.update).toHaveBeenCalledWith({
       where: {
         id: 10,
       },
@@ -153,13 +294,9 @@ describe('ProdutosService', () => {
       },
     });
 
-    expect(
-      prisma.produto.delete,
-    ).not.toHaveBeenCalled();
+    expect(prisma.produto.delete).not.toHaveBeenCalled();
 
-    expect(
-      cloudinaryService.deleteImage,
-    ).not.toHaveBeenCalled();
+    expect(cloudinaryService.deleteImage).not.toHaveBeenCalled();
   });
 
   it('deve excluir definitivamente produto sem histórico de pedidos', async () => {
@@ -177,28 +314,21 @@ describe('ProdutosService', () => {
 
     await service.delete(10);
 
-    expect(
-      prisma.produto.delete,
-    ).toHaveBeenCalledTimes(1);
+    expect(prisma.produto.delete).toHaveBeenCalledTimes(1);
 
-    expect(
-      prisma.produto.delete,
-    ).toHaveBeenCalledWith({
+    expect(prisma.produto.delete).toHaveBeenCalledWith({
       where: {
         id: 10,
       },
     });
 
-    expect(
-      prisma.produto.update,
-    ).not.toHaveBeenCalled();
+    expect(prisma.produto.update).not.toHaveBeenCalled();
   });
 
   it('deve remover imagem da Cloudinary ao excluir definitivamente um produto', async () => {
     prisma.produto.findUnique.mockResolvedValue({
       id: 10,
-      imagePublicId:
-        'mel-api/produtos/mel-teste',
+      imagePublicId: 'mel-api/produtos/mel-teste',
       _count: {
         pedidoItems: 0,
       },
@@ -208,67 +338,41 @@ describe('ProdutosService', () => {
       id: 10,
     });
 
-    cloudinaryService.deleteImage.mockResolvedValue(
-      undefined,
-    );
+    cloudinaryService.deleteImage.mockResolvedValue(undefined);
 
     await service.delete(10);
 
-    expect(
-      cloudinaryService.deleteImage,
-    ).toHaveBeenCalledTimes(1);
+    expect(cloudinaryService.deleteImage).toHaveBeenCalledTimes(1);
 
-    expect(
-      cloudinaryService.deleteImage,
-    ).toHaveBeenCalledWith(
+    expect(cloudinaryService.deleteImage).toHaveBeenCalledWith(
       'mel-api/produtos/mel-teste',
     );
   });
 
   it('deve rejeitar exclusão de produto inexistente', async () => {
-    prisma.produto.findUnique.mockResolvedValue(
-      null,
+    prisma.produto.findUnique.mockResolvedValue(null);
+
+    await expect(service.delete(999)).rejects.toThrow(
+      new NotFoundException('Produto não encontrado.'),
     );
 
-    await expect(
-      service.delete(999),
-    ).rejects.toThrow(
-      new NotFoundException(
-        'Produto não encontrado.',
-      ),
-    );
+    expect(prisma.produto.delete).not.toHaveBeenCalled();
 
-    expect(
-      prisma.produto.delete,
-    ).not.toHaveBeenCalled();
+    expect(prisma.produto.update).not.toHaveBeenCalled();
 
-    expect(
-      prisma.produto.update,
-    ).not.toHaveBeenCalled();
-
-    expect(
-      cloudinaryService.deleteImage,
-    ).not.toHaveBeenCalled();
+    expect(cloudinaryService.deleteImage).not.toHaveBeenCalled();
   });
 
   it('deve listar publicamente apenas produtos ativos de categorias ativas', async () => {
-    prisma.produto.findMany.mockResolvedValue(
-      [],
-    );
+    prisma.produto.findMany.mockResolvedValue([]);
 
-    const filter =
-      {} as ProdutoFilterDto;
+    const filter = {} as ProdutoFilterDto;
 
-    const result =
-      await service.findAllPublic(
-        filter,
-      );
+    const result = await service.findAllPublic(filter);
 
     expect(result).toEqual([]);
 
-    expect(
-      prisma.produto.findMany,
-    ).toHaveBeenCalledWith({
+    expect(prisma.produto.findMany).toHaveBeenCalledWith({
       where: {
         active: true,
         category: {

@@ -14,10 +14,7 @@ import {
 import { Role } from '@prisma/client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import {
-  Roles,
-  RolesGuard,
-} from '../common/guards/roles.guard';
+import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import type { AuthUser } from '../common/types/auth-user.type';
 import { CreatePedidoDto } from './dto/create-pedido.dto';
 import { PedidoFilterDto } from './dto/pedido-filter.dto';
@@ -26,29 +23,19 @@ import { PedidosService } from './pedidos.service';
 
 @Controller('pedidos')
 export class PedidosController {
-  constructor(
-    private readonly pedidosService: PedidosService,
-  ) {}
+  constructor(private readonly pedidosService: PedidosService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Get()
-  findAll(
-    @Query() filter: PedidoFilterDto,
-  ) {
-    return this.pedidosService.findAll(
-      filter,
-    );
+  findAll(@Query() filter: PedidoFilterDto) {
+    return this.pedidosService.findAll(filter);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('meus-pedidos')
-  findMyPedidos(
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.pedidosService.findMyPedidos(
-      user.sub,
-    );
+  findMyPedidos(@CurrentUser() user: AuthUser) {
+    return this.pedidosService.findMyPedidos(user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -57,34 +44,21 @@ export class PedidosController {
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.pedidosService.findMyPedidoById(
-      id,
-      user.sub,
-    );
+    return this.pedidosService.findMyPedidoById(id, user.sub);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Get(':id')
-  findById(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    return this.pedidosService.findById(
-      id,
-    );
+  findById(@Param('id', ParseIntPipe) id: number) {
+    return this.pedidosService.findById(id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: CreatePedidoDto,
-  ) {
-    return this.pedidosService.create(
-      user.sub,
-      dto,
-    );
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreatePedidoDto) {
+    return this.pedidosService.create(user.sub, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -94,9 +68,6 @@ export class PedidosController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateStatusPedidoDto,
   ) {
-    return this.pedidosService.updateStatus(
-      id,
-      dto,
-    );
+    return this.pedidosService.updateStatus(id, dto);
   }
 }

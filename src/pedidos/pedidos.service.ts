@@ -4,47 +4,25 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  Prisma,
-  StatusPedido,
-} from '@prisma/client';
+import { Prisma, StatusPedido } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePedidoDto } from './dto/create-pedido.dto';
 import { PedidoFilterDto } from './dto/pedido-filter.dto';
 import { UpdateStatusPedidoDto } from './dto/update-status-pedido.dto';
 
-const ALLOWED_STATUS_TRANSITIONS: Record<
-  StatusPedido,
-  StatusPedido[]
-> = {
-  [StatusPedido.PENDENTE]: [
-    StatusPedido.PAGO,
-    StatusPedido.CANCELADO,
-  ],
-  [StatusPedido.PAGO]: [
-    StatusPedido.CONFIRMADO,
-    StatusPedido.CANCELADO,
-  ],
-  [StatusPedido.CONFIRMADO]: [
-    StatusPedido.PREPARANDO,
-    StatusPedido.CANCELADO,
-  ],
-  [StatusPedido.PREPARANDO]: [
-    StatusPedido.ENVIADO,
-    StatusPedido.CANCELADO,
-  ],
-  [StatusPedido.ENVIADO]: [
-    StatusPedido.ENTREGUE,
-  ],
+const ALLOWED_STATUS_TRANSITIONS: Record<StatusPedido, StatusPedido[]> = {
+  [StatusPedido.PENDENTE]: [StatusPedido.PAGO, StatusPedido.CANCELADO],
+  [StatusPedido.PAGO]: [StatusPedido.CONFIRMADO, StatusPedido.CANCELADO],
+  [StatusPedido.CONFIRMADO]: [StatusPedido.PREPARANDO, StatusPedido.CANCELADO],
+  [StatusPedido.PREPARANDO]: [StatusPedido.ENVIADO, StatusPedido.CANCELADO],
+  [StatusPedido.ENVIADO]: [StatusPedido.ENTREGUE],
   [StatusPedido.ENTREGUE]: [],
   [StatusPedido.CANCELADO]: [],
 };
 
 @Injectable()
 export class PedidosService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findAll(filter: PedidoFilterDto) {
     const page = filter.page ?? 1;
@@ -60,10 +38,7 @@ export class PedidosService {
     const search = filter.search?.trim();
 
     if (search) {
-      const numericSearch =
-        /^\d+$/.test(search)
-          ? Number(search)
-          : null;
+      const numericSearch = /^\d+$/.test(search) ? Number(search) : null;
 
       where.OR = [
         {
@@ -92,32 +67,26 @@ export class PedidosService {
       ];
     }
 
-    const [pedidos, totalItems] =
-      await this.prisma.$transaction([
-        this.prisma.pedido.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: {
-            createdAt: 'desc',
-          },
-          include: this.defaultInclude(),
-        }),
+    const [pedidos, totalItems] = await this.prisma.$transaction([
+      this.prisma.pedido.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: this.defaultInclude(),
+      }),
 
-        this.prisma.pedido.count({
-          where,
-        }),
-      ]);
+      this.prisma.pedido.count({
+        where,
+      }),
+    ]);
 
-    const totalPages = Math.max(
-      1,
-      Math.ceil(totalItems / limit),
-    );
+    const totalPages = Math.max(1, Math.ceil(totalItems / limit));
 
     return {
-      content: pedidos.map((pedido) =>
-        this.toResponse(pedido),
-      ),
+      content: pedidos.map((pedido) => this.toResponse(pedido)),
       pagination: {
         page,
         limit,
@@ -130,58 +99,44 @@ export class PedidosService {
   }
 
   async findById(id: number) {
-    const pedido =
-      await this.prisma.pedido.findUnique({
-        where: {
-          id,
-        },
-        include: this.defaultInclude(),
-      });
+    const pedido = await this.prisma.pedido.findUnique({
+      where: {
+        id,
+      },
+      include: this.defaultInclude(),
+    });
 
     if (!pedido) {
-      throw new NotFoundException(
-        'Pedido não encontrado.',
-      );
+      throw new NotFoundException('Pedido não encontrado.');
     }
 
     return this.toResponse(pedido);
   }
 
-  async findMyPedidos(
-    clienteId: number,
-  ) {
-    const pedidos =
-      await this.prisma.pedido.findMany({
-        where: {
-          clienteId,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        include: this.defaultInclude(),
-      });
+  async findMyPedidos(clienteId: number) {
+    const pedidos = await this.prisma.pedido.findMany({
+      where: {
+        clienteId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: this.defaultInclude(),
+    });
 
-    return pedidos.map((pedido) =>
-      this.toResponse(pedido),
-    );
+    return pedidos.map((pedido) => this.toResponse(pedido));
   }
 
-  async findMyPedidoById(
-    id: number,
-    clienteId: number,
-  ) {
-    const pedido =
-      await this.prisma.pedido.findUnique({
-        where: {
-          id,
-        },
-        include: this.defaultInclude(),
-      });
+  async findMyPedidoById(id: number, clienteId: number) {
+    const pedido = await this.prisma.pedido.findUnique({
+      where: {
+        id,
+      },
+      include: this.defaultInclude(),
+    });
 
     if (!pedido) {
-      throw new NotFoundException(
-        'Pedido não encontrado.',
-      );
+      throw new NotFoundException('Pedido não encontrado.');
     }
 
     if (pedido.clienteId !== clienteId) {
@@ -193,288 +148,201 @@ export class PedidosService {
     return this.toResponse(pedido);
   }
 
-  async create(
-    clienteId: number,
-    dto: CreatePedidoDto,
-  ) {
-    const cliente =
-      await this.prisma.cliente.findUnique({
-        where: {
-          id: clienteId,
-        },
-        select: {
-          id: true,
-        },
-      });
+  async create(clienteId: number, dto: CreatePedidoDto) {
+    const cliente = await this.prisma.cliente.findUnique({
+      where: {
+        id: clienteId,
+      },
+      select: {
+        id: true,
+      },
+    });
 
     if (!cliente) {
-      throw new NotFoundException(
-        'Cliente não encontrado.',
-      );
+      throw new NotFoundException('Cliente não encontrado.');
     }
 
-    const produtoIds =
-      dto.items.map(
-        (item) => item.produtoId,
-      );
+    const produtoIds = dto.items.map((item) => item.produtoId);
 
-    const uniqueProdutoIds = [
-      ...new Set(produtoIds),
-    ];
+    const uniqueProdutoIds = [...new Set(produtoIds)];
 
-    if (
-      produtoIds.length !==
-      uniqueProdutoIds.length
-    ) {
+    if (produtoIds.length !== uniqueProdutoIds.length) {
       throw new BadRequestException(
         'Não envie o mesmo produto mais de uma vez no pedido.',
       );
     }
 
-    const produtos =
-      await this.prisma.produto.findMany({
-        where: {
-          id: {
-            in: uniqueProdutoIds,
-          },
+    const produtos = await this.prisma.produto.findMany({
+      where: {
+        id: {
+          in: uniqueProdutoIds,
         },
-      });
+      },
+    });
 
-    if (
-      produtos.length !==
-      uniqueProdutoIds.length
-    ) {
-      throw new NotFoundException(
-        'Um ou mais produtos não foram encontrados.',
-      );
+    if (produtos.length !== uniqueProdutoIds.length) {
+      throw new NotFoundException('Um ou mais produtos não foram encontrados.');
     }
 
-    const itemsData =
-      dto.items.map((item) => {
-        const produto =
-          produtos.find(
-            (produtoAtual) =>
-              produtoAtual.id ===
-              item.produtoId,
-          );
-
-        if (!produto) {
-          throw new NotFoundException(
-            'Produto não encontrado.',
-          );
-        }
-
-        if (!produto.active) {
-          throw new BadRequestException(
-            `O produto "${produto.name}" não está disponível para compra.`,
-          );
-        }
-
-        if (
-          item.quantity >
-          produto.stockQuantity
-        ) {
-          throw new BadRequestException(
-            `Estoque insuficiente para o produto "${produto.name}".`,
-          );
-        }
-
-        const unitPrice =
-          new Prisma.Decimal(
-            produto.price,
-          );
-
-        const subtotal =
-          unitPrice.mul(
-            item.quantity,
-          );
-
-        return {
-          produto,
-          quantity: item.quantity,
-          unitPrice,
-          subtotal,
-        };
-      });
-
-    const totalPrice =
-      itemsData.reduce(
-        (sum, item) =>
-          sum.add(item.subtotal),
-        new Prisma.Decimal(0),
+    const itemsData = dto.items.map((item) => {
+      const produto = produtos.find(
+        (produtoAtual) => produtoAtual.id === item.produtoId,
       );
 
-    const pedido =
-      await this.prisma.$transaction(
-        async (tx) => {
-          for (const item of itemsData) {
-            const stockUpdate =
-              await tx.produto.updateMany({
-                where: {
-                  id: item.produto.id,
-                  active: true,
-                  stockQuantity: {
-                    gte: item.quantity,
-                  },
-                },
-                data: {
-                  stockQuantity: {
-                    decrement:
-                      item.quantity,
-                  },
-                },
-              });
+      if (!produto) {
+        throw new NotFoundException('Produto não encontrado.');
+      }
 
-            if (
-              stockUpdate.count !== 1
-            ) {
-              throw new BadRequestException(
-                `O estoque do produto "${item.produto.name}" foi alterado. Verifique a quantidade disponível e tente novamente.`,
-              );
-            }
-          }
+      if (!produto.active) {
+        throw new BadRequestException(
+          `O produto "${produto.name}" não está disponível para compra.`,
+        );
+      }
 
-          return tx.pedido.create({
-            data: {
-              clienteId,
-              status:
-                StatusPedido.PENDENTE,
-              totalPrice,
-              items: {
-                create:
-                  itemsData.map(
-                    (item) => ({
-                      produtoId:
-                        item.produto.id,
-                      quantity:
-                        item.quantity,
-                      unitPrice:
-                        item.unitPrice,
-                      subtotal:
-                        item.subtotal,
-                    }),
-                  ),
-              },
+      if (item.quantity > produto.stockQuantity) {
+        throw new BadRequestException(
+          `Estoque insuficiente para o produto "${produto.name}".`,
+        );
+      }
+
+      const unitPrice = new Prisma.Decimal(produto.price);
+
+      const subtotal = unitPrice.mul(item.quantity);
+
+      return {
+        produto,
+        quantity: item.quantity,
+        unitPrice,
+        subtotal,
+      };
+    });
+
+    const totalPrice = itemsData.reduce(
+      (sum, item) => sum.add(item.subtotal),
+      new Prisma.Decimal(0),
+    );
+
+    const pedido = await this.prisma.$transaction(async (tx) => {
+      for (const item of itemsData) {
+        const stockUpdate = await tx.produto.updateMany({
+          where: {
+            id: item.produto.id,
+            active: true,
+            stockQuantity: {
+              gte: item.quantity,
             },
-            include:
-              this.defaultInclude(),
-          });
+          },
+          data: {
+            stockQuantity: {
+              decrement: item.quantity,
+            },
+          },
+        });
+
+        if (stockUpdate.count !== 1) {
+          throw new BadRequestException(
+            `O estoque do produto "${item.produto.name}" foi alterado. Verifique a quantidade disponível e tente novamente.`,
+          );
+        }
+      }
+
+      return tx.pedido.create({
+        data: {
+          clienteId,
+          status: StatusPedido.PENDENTE,
+          totalPrice,
+          items: {
+            create: itemsData.map((item) => ({
+              produtoId: item.produto.id,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              subtotal: item.subtotal,
+            })),
+          },
         },
-      );
+        include: this.defaultInclude(),
+      });
+    });
 
     return this.toResponse(pedido);
   }
 
-  async updateStatus(
-    id: number,
-    dto: UpdateStatusPedidoDto,
-  ) {
-    const pedidoAtual =
-      await this.prisma.pedido.findUnique({
-        where: {
-          id,
-        },
-        include: {
-          items: {
-            select: {
-              produtoId: true,
-              quantity: true,
-            },
+  async updateStatus(id: number, dto: UpdateStatusPedidoDto) {
+    const pedidoAtual = await this.prisma.pedido.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        items: {
+          select: {
+            produtoId: true,
+            quantity: true,
           },
         },
-      });
+      },
+    });
 
     if (!pedidoAtual) {
-      throw new NotFoundException(
-        'Pedido não encontrado.',
-      );
+      throw new NotFoundException('Pedido não encontrado.');
     }
 
-    if (
-      pedidoAtual.status === dto.status
-    ) {
+    if (pedidoAtual.status === dto.status) {
       return this.findById(id);
     }
 
-    const allowedStatuses =
-      ALLOWED_STATUS_TRANSITIONS[
-        pedidoAtual.status
-      ];
+    const allowedStatuses = ALLOWED_STATUS_TRANSITIONS[pedidoAtual.status];
 
-    if (
-      !allowedStatuses.includes(
-        dto.status,
-      )
-    ) {
+    if (!allowedStatuses.includes(dto.status)) {
       throw new BadRequestException(
         `Não é permitido alterar o pedido de ${pedidoAtual.status} para ${dto.status}.`,
       );
     }
 
-    return this.prisma.$transaction(
-      async (tx) => {
-        const statusUpdate =
-          await tx.pedido.updateMany({
+    return this.prisma.$transaction(async (tx) => {
+      const statusUpdate = await tx.pedido.updateMany({
+        where: {
+          id,
+          status: pedidoAtual.status,
+        },
+        data: {
+          status: dto.status,
+        },
+      });
+
+      if (statusUpdate.count !== 1) {
+        throw new BadRequestException(
+          'O status deste pedido foi alterado por outra operação. Atualize a página e tente novamente.',
+        );
+      }
+
+      if (dto.status === StatusPedido.CANCELADO) {
+        for (const item of pedidoAtual.items) {
+          await tx.produto.update({
             where: {
-              id,
-              status:
-                pedidoAtual.status,
+              id: item.produtoId,
             },
             data: {
-              status: dto.status,
+              stockQuantity: {
+                increment: item.quantity,
+              },
             },
           });
-
-        if (
-          statusUpdate.count !== 1
-        ) {
-          throw new BadRequestException(
-            'O status deste pedido foi alterado por outra operação. Atualize a página e tente novamente.',
-          );
         }
+      }
 
-        if (
-          dto.status ===
-          StatusPedido.CANCELADO
-        ) {
-          for (
-            const item of
-            pedidoAtual.items
-          ) {
-            await tx.produto.update({
-              where: {
-                id: item.produtoId,
-              },
-              data: {
-                stockQuantity: {
-                  increment:
-                    item.quantity,
-                },
-              },
-            });
-          }
-        }
+      const pedidoAtualizado = await tx.pedido.findUnique({
+        where: {
+          id,
+        },
+        include: this.defaultInclude(),
+      });
 
-        const pedidoAtualizado =
-          await tx.pedido.findUnique({
-            where: {
-              id,
-            },
-            include:
-              this.defaultInclude(),
-          });
+      if (!pedidoAtualizado) {
+        throw new NotFoundException('Pedido não encontrado.');
+      }
 
-        if (!pedidoAtualizado) {
-          throw new NotFoundException(
-            'Pedido não encontrado.',
-          );
-        }
-
-        return this.toResponse(
-          pedidoAtualizado,
-        );
-      },
-    );
+      return this.toResponse(pedidoAtualizado);
+    });
   }
 
   private defaultInclude() {
@@ -502,45 +370,27 @@ export class PedidosService {
 
   private toResponse(
     pedido: Prisma.PedidoGetPayload<{
-      include: ReturnType<
-        PedidosService['defaultInclude']
-      >;
+      include: ReturnType<PedidosService['defaultInclude']>;
     }>,
   ) {
     return {
       id: pedido.id,
       status: pedido.status,
-      totalPrice: Number(
-        pedido.totalPrice,
-      ),
+      totalPrice: Number(pedido.totalPrice),
       clienteId: pedido.clienteId,
-      clienteName:
-        pedido.cliente.name,
-      clienteEmail:
-        pedido.cliente.email,
-      items: pedido.items.map(
-        (item) => ({
-          id: item.id,
-          produtoId:
-            item.produtoId,
-          produtoName:
-            item.produto.name,
-          imageUrl:
-            item.produto.imageUrl,
-          quantity:
-            item.quantity,
-          unitPrice: Number(
-            item.unitPrice,
-          ),
-          subtotal: Number(
-            item.subtotal,
-          ),
-        }),
-      ),
-      createdAt:
-        pedido.createdAt,
-      updatedAt:
-        pedido.updatedAt,
+      clienteName: pedido.cliente.name,
+      clienteEmail: pedido.cliente.email,
+      items: pedido.items.map((item) => ({
+        id: item.id,
+        produtoId: item.produtoId,
+        produtoName: item.produto.name,
+        imageUrl: item.produto.imageUrl,
+        quantity: item.quantity,
+        unitPrice: Number(item.unitPrice),
+        subtotal: Number(item.subtotal),
+      })),
+      createdAt: pedido.createdAt,
+      updatedAt: pedido.updatedAt,
     };
   }
 }

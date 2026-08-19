@@ -1,7 +1,4 @@
-import {
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CategoriasService } from './categorias.service';
@@ -40,9 +37,7 @@ describe('CategoriasService', () => {
       $transaction: jest.fn(),
     };
 
-    service = new CategoriasService(
-      prisma as unknown as PrismaService,
-    );
+    service = new CategoriasService(prisma as unknown as PrismaService);
   });
 
   it('should be defined', () => {
@@ -61,14 +56,10 @@ describe('CategoriasService', () => {
         active: true,
       }),
     ).rejects.toThrow(
-      new ConflictException(
-        'Já existe uma categoria com esse nome.',
-      ),
+      new ConflictException('Já existe uma categoria com esse nome.'),
     );
 
-    expect(
-      prisma.categoria.create,
-    ).not.toHaveBeenCalled();
+    expect(prisma.categoria.create).not.toHaveBeenCalled();
   });
 
   it('deve desativar a categoria e seus produtos ativos ao desativar por PATCH', async () => {
@@ -78,42 +69,28 @@ describe('CategoriasService', () => {
 
     const tx = {
       categoria: {
-        update: jest
-          .fn()
-          .mockResolvedValue({
-            id: 1,
-            name: 'Mel Puro',
-            active: false,
-          }),
+        update: jest.fn().mockResolvedValue({
+          id: 1,
+          name: 'Mel Puro',
+          active: false,
+        }),
       },
       produto: {
-        updateMany: jest
-          .fn()
-          .mockResolvedValue({
-            count: 2,
-          }),
+        updateMany: jest.fn().mockResolvedValue({
+          count: 2,
+        }),
       },
     };
 
     prisma.$transaction.mockImplementation(
-      async (
-        callback: (
-          transaction: typeof tx,
-        ) => unknown,
-      ) => callback(tx),
+      async (callback: (transaction: typeof tx) => unknown) => callback(tx),
     );
 
-    const result =
-      await service.partialUpdate(
-        1,
-        {
-          active: false,
-        },
-      );
+    const result = await service.partialUpdate(1, {
+      active: false,
+    });
 
-    expect(
-      tx.categoria.update,
-    ).toHaveBeenCalledWith({
+    expect(tx.categoria.update).toHaveBeenCalledWith({
       where: {
         id: 1,
       },
@@ -122,9 +99,7 @@ describe('CategoriasService', () => {
       },
     });
 
-    expect(
-      tx.produto.updateMany,
-    ).toHaveBeenCalledWith({
+    expect(tx.produto.updateMany).toHaveBeenCalledWith({
       where: {
         categoryId: 1,
         active: true,
@@ -157,13 +132,9 @@ describe('CategoriasService', () => {
 
     await service.delete(1);
 
-    expect(
-      prisma.$transaction,
-    ).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
 
-    expect(
-      prisma.categoria.update,
-    ).toHaveBeenCalledWith({
+    expect(prisma.categoria.update).toHaveBeenCalledWith({
       where: {
         id: 1,
       },
@@ -172,9 +143,7 @@ describe('CategoriasService', () => {
       },
     });
 
-    expect(
-      prisma.produto.updateMany,
-    ).toHaveBeenCalledWith({
+    expect(prisma.produto.updateMany).toHaveBeenCalledWith({
       where: {
         categoryId: 1,
         active: true,
@@ -184,9 +153,7 @@ describe('CategoriasService', () => {
       },
     });
 
-    expect(
-      prisma.categoria.delete,
-    ).not.toHaveBeenCalled();
+    expect(prisma.categoria.delete).not.toHaveBeenCalled();
   });
 
   it('deve excluir definitivamente categoria sem produtos vinculados', async () => {
@@ -203,69 +170,40 @@ describe('CategoriasService', () => {
 
     await service.delete(1);
 
-    expect(
-      prisma.categoria.delete,
-    ).toHaveBeenCalledTimes(1);
+    expect(prisma.categoria.delete).toHaveBeenCalledTimes(1);
 
-    expect(
-      prisma.categoria.delete,
-    ).toHaveBeenCalledWith({
+    expect(prisma.categoria.delete).toHaveBeenCalledWith({
       where: {
         id: 1,
       },
     });
 
-    expect(
-      prisma.$transaction,
-    ).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('deve rejeitar exclusão de categoria inexistente', async () => {
-    prisma.categoria.findUnique.mockResolvedValue(
-      null,
+    prisma.categoria.findUnique.mockResolvedValue(null);
+
+    await expect(service.delete(999)).rejects.toThrow(
+      new NotFoundException('Categoria não encontrada.'),
     );
 
-    await expect(
-      service.delete(999),
-    ).rejects.toThrow(
-      new NotFoundException(
-        'Categoria não encontrada.',
-      ),
-    );
+    expect(prisma.categoria.delete).not.toHaveBeenCalled();
 
-    expect(
-      prisma.categoria.delete,
-    ).not.toHaveBeenCalled();
-
-    expect(
-      prisma.$transaction,
-    ).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('deve rejeitar atualização de categoria inexistente', async () => {
-    prisma.categoria.findUnique.mockResolvedValue(
-      null,
-    );
+    prisma.categoria.findUnique.mockResolvedValue(null);
 
     await expect(
-      service.partialUpdate(
-        999,
-        {
-          active: false,
-        },
-      ),
-    ).rejects.toThrow(
-      new NotFoundException(
-        'Categoria não encontrada.',
-      ),
-    );
+      service.partialUpdate(999, {
+        active: false,
+      }),
+    ).rejects.toThrow(new NotFoundException('Categoria não encontrada.'));
 
-    expect(
-      prisma.categoria.update,
-    ).not.toHaveBeenCalled();
+    expect(prisma.categoria.update).not.toHaveBeenCalled();
 
-    expect(
-      prisma.$transaction,
-    ).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

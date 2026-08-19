@@ -1,7 +1,4 @@
-import {
-  Test,
-  TestingModule,
-} from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { AvaliacoesController } from './avaliacoes.controller';
 import { AvaliacoesService } from './avaliacoes.service';
 
@@ -9,23 +6,17 @@ describe('AvaliacoesController', () => {
   let controller: AvaliacoesController;
 
   beforeEach(async () => {
-    const module: TestingModule =
-      await Test.createTestingModule({
-        controllers: [
-          AvaliacoesController,
-        ],
-        providers: [
-          {
-            provide: AvaliacoesService,
-            useValue: {},
-          },
-        ],
-      }).compile();
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [AvaliacoesController],
+      providers: [
+        {
+          provide: AvaliacoesService,
+          useValue: {},
+        },
+      ],
+    }).compile();
 
-    controller =
-      module.get<AvaliacoesController>(
-        AvaliacoesController,
-      );
+    controller = module.get<AvaliacoesController>(AvaliacoesController);
   });
 
   it('should be defined', () => {

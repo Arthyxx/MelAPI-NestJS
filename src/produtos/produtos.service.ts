@@ -15,18 +15,14 @@ import { PutProdutoDto } from './dto/put-produto.dto';
 
 @Injectable()
 export class ProdutosService {
-  private readonly logger = new Logger(
-    ProdutosService.name,
-  );
+  private readonly logger = new Logger(ProdutosService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly cloudinaryService: CloudinaryService,
   ) {}
 
-  async findAllPublic(
-    filter: ProdutoFilterDto,
-  ) {
+  async findAllPublic(filter: ProdutoFilterDto) {
     const where: Prisma.ProdutoWhereInput = {
       active: true,
       category: {
@@ -45,35 +41,28 @@ export class ProdutosService {
       where.categoryId = filter.categoryId;
     }
 
-    const produtos =
-      await this.prisma.produto.findMany({
-        where,
-        orderBy: this.buildOrderBy(
-          filter.sort,
-        ),
-        include: {
-          category: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          avaliacoes: {
-            select: {
-              rating: true,
-            },
+    const produtos = await this.prisma.produto.findMany({
+      where,
+      orderBy: this.buildOrderBy(filter.sort),
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
           },
         },
-      });
+        avaliacoes: {
+          select: {
+            rating: true,
+          },
+        },
+      },
+    });
 
-    return produtos.map((produto) =>
-      this.toResponse(produto),
-    );
+    return produtos.map((produto) => this.toResponse(produto));
   }
 
-  async findAllAdmin(
-    filter: ProdutoFilterDto,
-  ) {
+  async findAllAdmin(filter: ProdutoFilterDto) {
     const page = filter.page ?? 1;
     const limit = filter.limit ?? 10;
     const skip = (page - 1) * limit;
@@ -95,44 +84,36 @@ export class ProdutosService {
       where.active = filter.active;
     }
 
-    const [produtos, totalItems] =
-      await this.prisma.$transaction([
-        this.prisma.produto.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: this.buildOrderBy(
-            filter.sort,
-          ),
-          include: {
-            category: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            avaliacoes: {
-              select: {
-                rating: true,
-              },
+    const [produtos, totalItems] = await this.prisma.$transaction([
+      this.prisma.produto.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: this.buildOrderBy(filter.sort),
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
             },
           },
-        }),
+          avaliacoes: {
+            select: {
+              rating: true,
+            },
+          },
+        },
+      }),
 
-        this.prisma.produto.count({
-          where,
-        }),
-      ]);
+      this.prisma.produto.count({
+        where,
+      }),
+    ]);
 
-    const totalPages = Math.max(
-      1,
-      Math.ceil(totalItems / limit),
-    );
+    const totalPages = Math.max(1, Math.ceil(totalItems / limit));
 
     return {
-      content: produtos.map((produto) =>
-        this.toResponse(produto),
-      ),
+      content: produtos.map((produto) => this.toResponse(produto)),
       pagination: {
         page,
         limit,
@@ -145,94 +126,81 @@ export class ProdutosService {
   }
 
   async findByIdPublic(id: number) {
-    const produto =
-      await this.prisma.produto.findFirst({
-        where: {
-          id,
+    const produto = await this.prisma.produto.findFirst({
+      where: {
+        id,
+        active: true,
+        category: {
           active: true,
-          category: {
-            active: true,
+        },
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
           },
         },
-        include: {
-          category: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          avaliacoes: {
-            select: {
-              rating: true,
-            },
+        avaliacoes: {
+          select: {
+            rating: true,
           },
         },
-      });
+      },
+    });
 
     if (!produto) {
-      throw new NotFoundException(
-        'Produto não encontrado.',
-      );
+      throw new NotFoundException('Produto não encontrado.');
     }
 
     return this.toResponse(produto);
   }
 
   async findByIdAdmin(id: number) {
-    const produto =
-      await this.prisma.produto.findUnique({
-        where: {
-          id,
-        },
-        include: {
-          category: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          avaliacoes: {
-            select: {
-              rating: true,
-            },
+    const produto = await this.prisma.produto.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
           },
         },
-      });
+        avaliacoes: {
+          select: {
+            rating: true,
+          },
+        },
+      },
+    });
 
     if (!produto) {
-      throw new NotFoundException(
-        'Produto não encontrado.',
-      );
+      throw new NotFoundException('Produto não encontrado.');
     }
 
     return this.toResponse(produto);
   }
 
   async create(dto: CreateProdutoDto) {
-    const name = dto.name.trim();
+    const imagePublicId = dto.imagePublicId?.trim() || null;
 
-    await this.ensureNameIsAvailable(name);
+    try {
+      const name = dto.name.trim();
 
-    await this.ensureCategoriaIsActive(
-      dto.categoryId,
-    );
+      await this.ensureNameIsAvailable(name);
 
-    const produto =
-      await this.prisma.produto.create({
+      await this.ensureCategoriaIsActive(dto.categoryId);
+
+      const produto = await this.prisma.produto.create({
         data: {
           name,
-          description:
-            dto.description?.trim() || null,
-          price: new Prisma.Decimal(
-            dto.price,
-          ),
-          stockQuantity:
-            dto.stockQuantity,
-          imageUrl:
-            dto.imageUrl?.trim() || null,
-          imagePublicId:
-            dto.imagePublicId?.trim() ||
-            null,
+          description: dto.description?.trim() || null,
+          price: new Prisma.Decimal(dto.price),
+          stockQuantity: dto.stockQuantity,
+          imageUrl: dto.imageUrl?.trim() || null,
+          imagePublicId,
           active: dto.active ?? true,
           categoryId: dto.categoryId,
         },
@@ -251,48 +219,37 @@ export class ProdutosService {
         },
       });
 
-    return this.toResponse(produto);
+      return this.toResponse(produto);
+    } catch (error) {
+      await this.cleanupOrphanImage(imagePublicId);
+
+      throw error;
+    }
   }
 
-  async update(
-    id: number,
-    dto: PutProdutoDto,
-  ) {
-    const produtoAtual =
-      await this.ensureProdutoExists(id);
+  async update(id: number, dto: PutProdutoDto) {
+    const novoImagePublicId = dto.imagePublicId?.trim() || null;
 
-    const name = dto.name.trim();
+    try {
+      const produtoAtual = await this.ensureProdutoExists(id);
 
-    await this.ensureNameIsAvailable(
-      name,
-      id,
-    );
+      const name = dto.name.trim();
 
-    await this.ensureCategoriaIsActive(
-      dto.categoryId,
-    );
+      await this.ensureNameIsAvailable(name, id);
 
-    const novoImagePublicId =
-      dto.imagePublicId?.trim() || null;
+      await this.ensureCategoriaIsActive(dto.categoryId);
 
-    const produto =
-      await this.prisma.produto.update({
+      const produto = await this.prisma.produto.update({
         where: {
           id,
         },
         data: {
           name,
-          description:
-            dto.description?.trim() || null,
-          price: new Prisma.Decimal(
-            dto.price,
-          ),
-          stockQuantity:
-            dto.stockQuantity,
-          imageUrl:
-            dto.imageUrl?.trim() || null,
-          imagePublicId:
-            novoImagePublicId,
+          description: dto.description?.trim() || null,
+          price: new Prisma.Decimal(dto.price),
+          stockQuantity: dto.stockQuantity,
+          imageUrl: dto.imageUrl?.trim() || null,
+          imagePublicId: novoImagePublicId,
           active: dto.active,
           categoryId: dto.categoryId,
         },
@@ -311,93 +268,76 @@ export class ProdutosService {
         },
       });
 
-    await this.cleanupReplacedImage(
-      produtoAtual.imagePublicId,
-      novoImagePublicId,
-    );
+      await this.cleanupReplacedImage(
+        produtoAtual.imagePublicId,
+        novoImagePublicId,
+      );
 
-    return this.toResponse(produto);
+      return this.toResponse(produto);
+    } catch (error) {
+      await this.cleanupOrphanImage(novoImagePublicId);
+
+      throw error;
+    }
   }
 
-  async partialUpdate(
-    id: number,
-    dto: PatchProdutoDto,
-  ) {
-    const produtoAtual =
-      await this.ensureProdutoExists(id);
+  async partialUpdate(id: number, dto: PatchProdutoDto) {
+    const candidateImagePublicId = dto.imagePublicId?.trim() || null;
 
-    const data: Prisma.ProdutoUpdateInput =
-      {};
+    try {
+      const produtoAtual = await this.ensureProdutoExists(id);
 
-    let novoImagePublicId =
-      produtoAtual.imagePublicId;
+      const data: Prisma.ProdutoUpdateInput = {};
 
-    if (dto.name !== undefined) {
-      const name = dto.name.trim();
+      let novoImagePublicId = produtoAtual.imagePublicId;
 
-      await this.ensureNameIsAvailable(
-        name,
-        id,
-      );
+      if (dto.name !== undefined) {
+        const name = dto.name.trim();
 
-      data.name = name;
-    }
+        await this.ensureNameIsAvailable(name, id);
 
-    if (dto.description !== undefined) {
-      data.description =
-        dto.description.trim() || null;
-    }
+        data.name = name;
+      }
 
-    if (dto.price !== undefined) {
-      data.price = new Prisma.Decimal(
-        dto.price,
-      );
-    }
+      if (dto.description !== undefined) {
+        data.description = dto.description.trim() || null;
+      }
 
-    if (dto.stockQuantity !== undefined) {
-      data.stockQuantity =
-        dto.stockQuantity;
-    }
+      if (dto.price !== undefined) {
+        data.price = new Prisma.Decimal(dto.price);
+      }
 
-    if (dto.imageUrl !== undefined) {
-      data.imageUrl =
-        dto.imageUrl.trim() || null;
+      if (dto.stockQuantity !== undefined) {
+        data.stockQuantity = dto.stockQuantity;
+      }
 
-      novoImagePublicId =
-        dto.imagePublicId?.trim() ||
-        null;
+      if (dto.imageUrl !== undefined) {
+        data.imageUrl = dto.imageUrl.trim() || null;
 
-      data.imagePublicId =
-        novoImagePublicId;
-    } else if (
-      dto.imagePublicId !== undefined
-    ) {
-      novoImagePublicId =
-        dto.imagePublicId.trim() ||
-        null;
+        novoImagePublicId = dto.imagePublicId?.trim() || null;
 
-      data.imagePublicId =
-        novoImagePublicId;
-    }
+        data.imagePublicId = novoImagePublicId;
+      } else if (dto.imagePublicId !== undefined) {
+        novoImagePublicId = dto.imagePublicId.trim() || null;
 
-    if (dto.active !== undefined) {
-      data.active = dto.active;
-    }
+        data.imagePublicId = novoImagePublicId;
+      }
 
-    if (dto.categoryId !== undefined) {
-      await this.ensureCategoriaIsActive(
-        dto.categoryId,
-      );
+      if (dto.active !== undefined) {
+        data.active = dto.active;
+      }
 
-      data.category = {
-        connect: {
-          id: dto.categoryId,
-        },
-      };
-    }
+      if (dto.categoryId !== undefined) {
+        await this.ensureCategoriaIsActive(dto.categoryId);
 
-    const produto =
-      await this.prisma.produto.update({
+        data.category = {
+          connect: {
+            id: dto.categoryId,
+          },
+        };
+      }
+
+      const produto = await this.prisma.produto.update({
         where: {
           id,
         },
@@ -417,39 +357,42 @@ export class ProdutosService {
         },
       });
 
-    await this.cleanupReplacedImage(
-      produtoAtual.imagePublicId,
-      novoImagePublicId,
-    );
+      await this.cleanupReplacedImage(
+        produtoAtual.imagePublicId,
+        novoImagePublicId,
+      );
 
-    return this.toResponse(produto);
+      return this.toResponse(produto);
+    } catch (error) {
+      await this.cleanupOrphanImage(candidateImagePublicId);
+
+      throw error;
+    }
   }
 
   async delete(id: number): Promise<void> {
-    const produto =
-      await this.prisma.produto.findUnique({
-        where: {
-          id,
-        },
-        select: {
-          id: true,
-          imagePublicId: true,
-          _count: {
-            select: {
-              pedidoItems: true,
-            },
+    const produto = await this.prisma.produto.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        id: true,
+        imagePublicId: true,
+        _count: {
+          select: {
+            pedidoItems: true,
           },
         },
-      });
+      },
+    });
 
     if (!produto) {
-      throw new NotFoundException(
-        'Produto não encontrado.',
-      );
+      throw new NotFoundException('Produto não encontrado.');
     }
 
     if (produto._count.pedidoItems > 0) {
       await this.deactivateProduto(id);
+
       return;
     }
 
@@ -460,16 +403,14 @@ export class ProdutosService {
         },
       });
 
-      await this.cleanupImage(
-        produto.imagePublicId,
-      );
+      await this.cleanupImage(produto.imagePublicId);
     } catch (error) {
       if (
-        error instanceof
-          Prisma.PrismaClientKnownRequestError &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2003'
       ) {
         await this.deactivateProduto(id);
+
         return;
       }
 
@@ -477,24 +418,18 @@ export class ProdutosService {
     }
   }
 
-  private buildOrderBy(
-    sort?: string,
-  ): Prisma.ProdutoOrderByWithRelationInput {
+  private buildOrderBy(sort?: string): Prisma.ProdutoOrderByWithRelationInput {
     if (!sort) {
       return {
         id: 'asc',
       };
     }
 
-    const [field, direction] =
-      sort.split(',');
+    const [field, direction] = sort.split(',');
 
     if (
-      (field === 'price' ||
-        field === 'name' ||
-        field === 'id') &&
-      (direction === 'asc' ||
-        direction === 'desc')
+      (field === 'price' || field === 'name' || field === 'id') &&
+      (direction === 'asc' || direction === 'desc')
     ) {
       return {
         [field]: direction,
@@ -506,74 +441,58 @@ export class ProdutosService {
     };
   }
 
-  private async ensureProdutoExists(
-    id: number,
-  ) {
-    const produto =
-      await this.prisma.produto.findUnique({
-        where: {
-          id,
-        },
-        select: {
-          id: true,
-          imagePublicId: true,
-        },
-      });
+  private async ensureProdutoExists(id: number) {
+    const produto = await this.prisma.produto.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        id: true,
+        imagePublicId: true,
+      },
+    });
 
     if (!produto) {
-      throw new NotFoundException(
-        'Produto não encontrado.',
-      );
+      throw new NotFoundException('Produto não encontrado.');
     }
 
     return produto;
   }
 
-  private async ensureNameIsAvailable(
-    name: string,
-    ignoreProdutoId?: number,
-  ) {
-    const produto =
-      await this.prisma.produto.findFirst({
-        where: {
-          name,
-          NOT:
-            ignoreProdutoId !== undefined
-              ? {
-                  id: ignoreProdutoId,
-                }
-              : undefined,
-        },
-        select: {
-          id: true,
-        },
-      });
+  private async ensureNameIsAvailable(name: string, ignoreProdutoId?: number) {
+    const produto = await this.prisma.produto.findFirst({
+      where: {
+        name,
+        NOT:
+          ignoreProdutoId !== undefined
+            ? {
+                id: ignoreProdutoId,
+              }
+            : undefined,
+      },
+      select: {
+        id: true,
+      },
+    });
 
     if (produto) {
-      throw new ConflictException(
-        'Já existe um produto com esse nome.',
-      );
+      throw new ConflictException('Já existe um produto com esse nome.');
     }
   }
 
-  private async ensureCategoriaIsActive(
-    categoryId: number,
-  ) {
-    const categoria =
-      await this.prisma.categoria.findUnique({
-        where: {
-          id: categoryId,
-        },
-        select: {
-          id: true,
-          active: true,
-        },
-      });
+  private async ensureCategoriaIsActive(categoryId: number) {
+    const categoria = await this.prisma.categoria.findUnique({
+      where: {
+        id: categoryId,
+      },
+      select: {
+        id: true,
+        active: true,
+      },
+    });
 
     if (!categoria) {
-      throw new NotFoundException(
-        'Categoria não encontrada.',
-      );
+      throw new NotFoundException('Categoria não encontrada.');
     }
 
     if (!categoria.active) {
@@ -583,9 +502,7 @@ export class ProdutosService {
     }
   }
 
-  private async deactivateProduto(
-    id: number,
-  ): Promise<void> {
+  private async deactivateProduto(id: number): Promise<void> {
     await this.prisma.produto.update({
       where: {
         id,
@@ -596,39 +513,58 @@ export class ProdutosService {
     });
   }
 
-  private async cleanupReplacedImage(
-    oldPublicId: string | null,
-    newPublicId: string | null,
-  ): Promise<void> {
-    if (
-      !oldPublicId ||
-      oldPublicId === newPublicId
-    ) {
-      return;
-    }
-
-    await this.cleanupImage(
-      oldPublicId,
-    );
-  }
-
-  private async cleanupImage(
-    publicId: string | null,
-  ): Promise<void> {
+  private async cleanupOrphanImage(publicId: string | null): Promise<void> {
     if (!publicId) {
       return;
     }
 
     try {
-      await this.cloudinaryService.deleteImage(
-        publicId,
+      const produtoVinculado = await this.prisma.produto.findFirst({
+        where: {
+          imagePublicId: publicId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (produtoVinculado) {
+        return;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Não foi possível verificar se a imagem "${publicId}" está vinculada a algum produto.`,
+        error instanceof Error ? error.message : undefined,
       );
+
+      return;
+    }
+
+    await this.cleanupImage(publicId);
+  }
+
+  private async cleanupReplacedImage(
+    oldPublicId: string | null,
+    newPublicId: string | null,
+  ): Promise<void> {
+    if (!oldPublicId || oldPublicId === newPublicId) {
+      return;
+    }
+
+    await this.cleanupImage(oldPublicId);
+  }
+
+  private async cleanupImage(publicId: string | null): Promise<void> {
+    if (!publicId) {
+      return;
+    }
+
+    try {
+      await this.cloudinaryService.deleteImage(publicId);
     } catch (error) {
       this.logger.warn(
         `Não foi possível remover a imagem "${publicId}" da Cloudinary.`,
-        error instanceof Error
-          ? error.message
-          : undefined,
+        error instanceof Error ? error.message : undefined,
       );
     }
   }
@@ -650,14 +586,12 @@ export class ProdutosService {
       };
     }>,
   ) {
-    const reviewsCount =
-      produto.avaliacoes.length;
+    const reviewsCount = produto.avaliacoes.length;
 
     const averageRating =
       reviewsCount > 0
         ? produto.avaliacoes.reduce(
-            (sum, avaliacao) =>
-              sum + avaliacao.rating,
+            (sum, avaliacao) => sum + avaliacao.rating,
             0,
           ) / reviewsCount
         : null;
@@ -665,22 +599,17 @@ export class ProdutosService {
     return {
       id: produto.id,
       name: produto.name,
-      description:
-        produto.description,
+      description: produto.description,
       price: Number(produto.price),
-      stockQuantity:
-        produto.stockQuantity,
+      stockQuantity: produto.stockQuantity,
       imageUrl: produto.imageUrl,
-      imagePublicId:
-        produto.imagePublicId,
+      imagePublicId: produto.imagePublicId,
       active: produto.active,
       category: produto.category,
       averageRating,
       reviewsCount,
-      createdAt:
-        produto.createdAt,
-      updatedAt:
-        produto.updatedAt,
+      createdAt: produto.createdAt,
+      updatedAt: produto.updatedAt,
     };
   }
 }

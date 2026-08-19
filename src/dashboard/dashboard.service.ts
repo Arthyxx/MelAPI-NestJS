@@ -1,15 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import {
-  Role,
-  StatusPedido,
-} from '@prisma/client';
+import { Role, StatusPedido } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async getSummary() {
     const [
@@ -61,32 +56,26 @@ export class DashboardService {
 
       this.prisma.pedido.count({
         where: {
-          status:
-            StatusPedido.PENDENTE,
+          status: StatusPedido.PENDENTE,
         },
       }),
 
       this.prisma.pedido.count({
         where: {
-          status:
-            StatusPedido.ENTREGUE,
+          status: StatusPedido.ENTREGUE,
         },
       }),
 
       this.prisma.pedido.count({
         where: {
-          status:
-            StatusPedido.CANCELADO,
+          status: StatusPedido.CANCELADO,
         },
       }),
 
       this.prisma.pedido.aggregate({
         where: {
           status: {
-            notIn: [
-              StatusPedido.PENDENTE,
-              StatusPedido.CANCELADO,
-            ],
+            notIn: [StatusPedido.PENDENTE, StatusPedido.CANCELADO],
           },
         },
         _sum: {
@@ -117,10 +106,7 @@ export class DashboardService {
       },
 
       faturamento: {
-        total: Number(
-          faturamento._sum.totalPrice ??
-            0,
-        ),
+        total: Number(faturamento._sum.totalPrice ?? 0),
       },
     };
   }

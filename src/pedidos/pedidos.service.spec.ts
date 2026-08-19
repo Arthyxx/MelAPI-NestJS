@@ -1,10 +1,5 @@
-import {
-  BadRequestException,
-} from '@nestjs/common';
-import {
-  Prisma,
-  StatusPedido,
-} from '@prisma/client';
+import { BadRequestException } from '@nestjs/common';
+import { Prisma, StatusPedido } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { PedidosService } from './pedidos.service';
@@ -38,9 +33,7 @@ describe('PedidosService', () => {
       $transaction: jest.fn(),
     };
 
-    service = new PedidosService(
-      prisma as unknown as PrismaService,
-    );
+    service = new PedidosService(prisma as unknown as PrismaService);
   });
 
   it('should be defined', () => {
@@ -65,21 +58,15 @@ describe('PedidosService', () => {
       ],
     };
 
-    await expect(
-      service.create(1, dto),
-    ).rejects.toThrow(
+    await expect(service.create(1, dto)).rejects.toThrow(
       new BadRequestException(
         'Não envie o mesmo produto mais de uma vez no pedido.',
       ),
     );
 
-    expect(
-      prisma.produto.findMany,
-    ).not.toHaveBeenCalled();
+    expect(prisma.produto.findMany).not.toHaveBeenCalled();
 
-    expect(
-      prisma.$transaction,
-    ).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('deve rejeitar pedido quando o estoque inicial é insuficiente', async () => {
@@ -93,9 +80,7 @@ describe('PedidosService', () => {
         name: 'Mel Silvestre',
         active: true,
         stockQuantity: 1,
-        price: new Prisma.Decimal(
-          '25.00',
-        ),
+        price: new Prisma.Decimal('25.00'),
       },
     ]);
 
@@ -108,17 +93,13 @@ describe('PedidosService', () => {
       ],
     };
 
-    await expect(
-      service.create(1, dto),
-    ).rejects.toThrow(
+    await expect(service.create(1, dto)).rejects.toThrow(
       new BadRequestException(
         'Estoque insuficiente para o produto "Mel Silvestre".',
       ),
     );
 
-    expect(
-      prisma.$transaction,
-    ).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('deve impedir o pedido se o estoque mudar durante a transação', async () => {
@@ -132,19 +113,15 @@ describe('PedidosService', () => {
         name: 'Mel Silvestre',
         active: true,
         stockQuantity: 10,
-        price: new Prisma.Decimal(
-          '25.00',
-        ),
+        price: new Prisma.Decimal('25.00'),
       },
     ]);
 
     const tx = {
       produto: {
-        updateMany: jest
-          .fn()
-          .mockResolvedValue({
-            count: 0,
-          }),
+        updateMany: jest.fn().mockResolvedValue({
+          count: 0,
+        }),
       },
       pedido: {
         create: jest.fn(),
@@ -152,11 +129,7 @@ describe('PedidosService', () => {
     };
 
     prisma.$transaction.mockImplementation(
-      async (
-        callback: (
-          transaction: typeof tx,
-        ) => unknown,
-      ) => callback(tx),
+      async (callback: (transaction: typeof tx) => unknown) => callback(tx),
     );
 
     const dto = {
@@ -168,17 +141,13 @@ describe('PedidosService', () => {
       ],
     };
 
-    await expect(
-      service.create(1, dto),
-    ).rejects.toThrow(
+    await expect(service.create(1, dto)).rejects.toThrow(
       new BadRequestException(
         'O estoque do produto "Mel Silvestre" foi alterado. Verifique a quantidade disponível e tente novamente.',
       ),
     );
 
-    expect(
-      tx.produto.updateMany,
-    ).toHaveBeenCalledWith({
+    expect(tx.produto.updateMany).toHaveBeenCalledWith({
       where: {
         id: 10,
         active: true,
@@ -193,16 +162,13 @@ describe('PedidosService', () => {
       },
     });
 
-    expect(
-      tx.pedido.create,
-    ).not.toHaveBeenCalled();
+    expect(tx.pedido.create).not.toHaveBeenCalled();
   });
 
   it('deve rejeitar uma transição de status não permitida', async () => {
     prisma.pedido.findUnique.mockResolvedValue({
       id: 1,
-      status:
-        StatusPedido.ENVIADO,
+      status: StatusPedido.ENVIADO,
       items: [
         {
           produtoId: 10,
@@ -213,8 +179,7 @@ describe('PedidosService', () => {
 
     await expect(
       service.updateStatus(1, {
-        status:
-          StatusPedido.CANCELADO,
+        status: StatusPedido.CANCELADO,
       }),
     ).rejects.toThrow(
       new BadRequestException(
@@ -222,16 +187,13 @@ describe('PedidosService', () => {
       ),
     );
 
-    expect(
-      prisma.$transaction,
-    ).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('deve impedir atualização quando o status mudar por outra operação', async () => {
     prisma.pedido.findUnique.mockResolvedValue({
       id: 1,
-      status:
-        StatusPedido.PAGO,
+      status: StatusPedido.PAGO,
       items: [
         {
           produtoId: 10,
@@ -242,11 +204,9 @@ describe('PedidosService', () => {
 
     const tx = {
       pedido: {
-        updateMany: jest
-          .fn()
-          .mockResolvedValue({
-            count: 0,
-          }),
+        updateMany: jest.fn().mockResolvedValue({
+          count: 0,
+        }),
         findUnique: jest.fn(),
       },
       produto: {
@@ -255,17 +215,12 @@ describe('PedidosService', () => {
     };
 
     prisma.$transaction.mockImplementation(
-      async (
-        callback: (
-          transaction: typeof tx,
-        ) => unknown,
-      ) => callback(tx),
+      async (callback: (transaction: typeof tx) => unknown) => callback(tx),
     );
 
     await expect(
       service.updateStatus(1, {
-        status:
-          StatusPedido.CANCELADO,
+        status: StatusPedido.CANCELADO,
       }),
     ).rejects.toThrow(
       new BadRequestException(
@@ -273,20 +228,15 @@ describe('PedidosService', () => {
       ),
     );
 
-    expect(
-      tx.produto.update,
-    ).not.toHaveBeenCalled();
+    expect(tx.produto.update).not.toHaveBeenCalled();
 
-    expect(
-      tx.pedido.findUnique,
-    ).not.toHaveBeenCalled();
+    expect(tx.pedido.findUnique).not.toHaveBeenCalled();
   });
 
   it('deve devolver o estoque exatamente uma vez ao cancelar o pedido', async () => {
     prisma.pedido.findUnique.mockResolvedValue({
       id: 1,
-      status:
-        StatusPedido.PAGO,
+      status: StatusPedido.PAGO,
       items: [
         {
           produtoId: 10,
@@ -301,32 +251,21 @@ describe('PedidosService', () => {
 
     const pedidoAtualizado = {
       id: 1,
-      status:
-        StatusPedido.CANCELADO,
-      totalPrice:
-        new Prisma.Decimal(
-          '75.00',
-        ),
+      status: StatusPedido.CANCELADO,
+      totalPrice: new Prisma.Decimal('75.00'),
       clienteId: 1,
       cliente: {
         id: 1,
         name: 'Cliente Teste',
-        email:
-          'cliente@teste.com',
+        email: 'cliente@teste.com',
       },
       items: [
         {
           id: 1,
           produtoId: 10,
           quantity: 2,
-          unitPrice:
-            new Prisma.Decimal(
-              '25.00',
-            ),
-          subtotal:
-            new Prisma.Decimal(
-              '50.00',
-            ),
+          unitPrice: new Prisma.Decimal('25.00'),
+          subtotal: new Prisma.Decimal('50.00'),
           produto: {
             id: 10,
             name: 'Mel Silvestre',
@@ -337,14 +276,8 @@ describe('PedidosService', () => {
           id: 2,
           produtoId: 11,
           quantity: 1,
-          unitPrice:
-            new Prisma.Decimal(
-              '25.00',
-            ),
-          subtotal:
-            new Prisma.Decimal(
-              '25.00',
-            ),
+          unitPrice: new Prisma.Decimal('25.00'),
+          subtotal: new Prisma.Decimal('25.00'),
           produto: {
             id: 11,
             name: 'Mel Florada',
@@ -352,113 +285,68 @@ describe('PedidosService', () => {
           },
         },
       ],
-      createdAt:
-        new Date(
-          '2026-08-11T12:00:00.000Z',
-        ),
-      updatedAt:
-        new Date(
-          '2026-08-11T13:00:00.000Z',
-        ),
+      createdAt: new Date('2026-08-11T12:00:00.000Z'),
+      updatedAt: new Date('2026-08-11T13:00:00.000Z'),
     };
 
     const tx = {
       pedido: {
-        updateMany: jest
-          .fn()
-          .mockResolvedValue({
-            count: 1,
-          }),
-        findUnique: jest
-          .fn()
-          .mockResolvedValue(
-            pedidoAtualizado,
-          ),
+        updateMany: jest.fn().mockResolvedValue({
+          count: 1,
+        }),
+        findUnique: jest.fn().mockResolvedValue(pedidoAtualizado),
       },
       produto: {
-        update: jest
-          .fn()
-          .mockResolvedValue({}),
+        update: jest.fn().mockResolvedValue({}),
       },
     };
 
     prisma.$transaction.mockImplementation(
-      async (
-        callback: (
-          transaction: typeof tx,
-        ) => unknown,
-      ) => callback(tx),
+      async (callback: (transaction: typeof tx) => unknown) => callback(tx),
     );
 
-    const result =
-      await service.updateStatus(
-        1,
-        {
-          status:
-            StatusPedido.CANCELADO,
-        },
-      );
+    const result = await service.updateStatus(1, {
+      status: StatusPedido.CANCELADO,
+    });
 
-    expect(
-      tx.pedido.updateMany,
-    ).toHaveBeenCalledTimes(1);
+    expect(tx.pedido.updateMany).toHaveBeenCalledTimes(1);
 
-    expect(
-      tx.pedido.updateMany,
-    ).toHaveBeenCalledWith({
+    expect(tx.pedido.updateMany).toHaveBeenCalledWith({
       where: {
         id: 1,
-        status:
-          StatusPedido.PAGO,
+        status: StatusPedido.PAGO,
       },
       data: {
-        status:
-          StatusPedido.CANCELADO,
+        status: StatusPedido.CANCELADO,
       },
     });
 
-    expect(
-      tx.produto.update,
-    ).toHaveBeenCalledTimes(2);
+    expect(tx.produto.update).toHaveBeenCalledTimes(2);
 
-    expect(
-      tx.produto.update,
-    ).toHaveBeenNthCalledWith(
-      1,
-      {
-        where: {
-          id: 10,
-        },
-        data: {
-          stockQuantity: {
-            increment: 2,
-          },
+    expect(tx.produto.update).toHaveBeenNthCalledWith(1, {
+      where: {
+        id: 10,
+      },
+      data: {
+        stockQuantity: {
+          increment: 2,
         },
       },
-    );
+    });
 
-    expect(
-      tx.produto.update,
-    ).toHaveBeenNthCalledWith(
-      2,
-      {
-        where: {
-          id: 11,
-        },
-        data: {
-          stockQuantity: {
-            increment: 1,
-          },
+    expect(tx.produto.update).toHaveBeenNthCalledWith(2, {
+      where: {
+        id: 11,
+      },
+      data: {
+        stockQuantity: {
+          increment: 1,
         },
       },
-    );
+    });
 
-    expect(result.status).toBe(
-      StatusPedido.CANCELADO,
-    );
+    expect(result.status).toBe(StatusPedido.CANCELADO);
 
-    expect(result.totalPrice).toBe(
-      75,
-    );
+    expect(result.totalPrice).toBe(75);
   });
 });

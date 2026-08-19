@@ -17,9 +17,7 @@ import { PatchClienteDto } from './dto/patch-cliente.dto';
 
 @Injectable()
 export class ClientesService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findAll(filter: ClienteFilterDto) {
     const page = filter.page ?? 1;
@@ -67,27 +65,23 @@ export class ClientesService {
       where.active = filter.active;
     }
 
-    const [clientes, totalItems] =
-      await this.prisma.$transaction([
-        this.prisma.cliente.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: {
-            id: 'asc',
-          },
-          select: this.defaultSelect(),
-        }),
+    const [clientes, totalItems] = await this.prisma.$transaction([
+      this.prisma.cliente.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          id: 'asc',
+        },
+        select: this.defaultSelect(),
+      }),
 
-        this.prisma.cliente.count({
-          where,
-        }),
-      ]);
+      this.prisma.cliente.count({
+        where,
+      }),
+    ]);
 
-    const totalPages = Math.max(
-      1,
-      Math.ceil(totalItems / limit),
-    );
+    const totalPages = Math.max(1, Math.ceil(totalItems / limit));
 
     return {
       content: clientes,
@@ -103,18 +97,15 @@ export class ClientesService {
   }
 
   async findById(id: number) {
-    const cliente =
-      await this.prisma.cliente.findUnique({
-        where: {
-          id,
-        },
-        select: this.defaultSelect(),
-      });
+    const cliente = await this.prisma.cliente.findUnique({
+      where: {
+        id,
+      },
+      select: this.defaultSelect(),
+    });
 
     if (!cliente) {
-      throw new NotFoundException(
-        'Cliente não encontrado.',
-      );
+      throw new NotFoundException('Cliente não encontrado.');
     }
 
     return cliente;
@@ -125,13 +116,11 @@ export class ClientesService {
   }
 
   async create(dto: CreateClienteDto) {
-    const email =
-      dto.email.trim().toLowerCase();
+    const email = dto.email.trim().toLowerCase();
 
     await this.ensureEmailIsAvailable(email);
 
-    const hashedPassword =
-      await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     return this.prisma.cliente.create({
       data: {
@@ -140,45 +129,25 @@ export class ClientesService {
         password: hashedPassword,
         role: Role.CLIENTE,
         active: true,
-        phone:
-          this.normalizeOptional(dto.phone),
-        street:
-          this.normalizeOptional(dto.street),
-        addressNumber:
-          this.normalizeOptional(
-            dto.addressNumber,
-          ),
-        complement:
-          this.normalizeOptional(
-            dto.complement,
-          ),
-        neighborhood:
-          this.normalizeOptional(
-            dto.neighborhood,
-          ),
-        city:
-          this.normalizeOptional(dto.city),
-        state:
-          this.normalizeState(dto.state),
-        zipCode:
-          this.normalizeOptional(
-            dto.zipCode,
-          ),
+        phone: this.normalizeOptional(dto.phone),
+        street: this.normalizeOptional(dto.street),
+        addressNumber: this.normalizeOptional(dto.addressNumber),
+        complement: this.normalizeOptional(dto.complement),
+        neighborhood: this.normalizeOptional(dto.neighborhood),
+        city: this.normalizeOptional(dto.city),
+        state: this.normalizeState(dto.state),
+        zipCode: this.normalizeOptional(dto.zipCode),
       },
       select: this.defaultSelect(),
     });
   }
 
-  async createAdmin(
-    dto: CreateAdminClienteDto,
-  ) {
-    const email =
-      dto.email.trim().toLowerCase();
+  async createAdmin(dto: CreateAdminClienteDto) {
+    const email = dto.email.trim().toLowerCase();
 
     await this.ensureEmailIsAvailable(email);
 
-    const hashedPassword =
-      await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     return this.prisma.cliente.create({
       data: {
@@ -187,43 +156,21 @@ export class ClientesService {
         password: hashedPassword,
         role: dto.role ?? Role.CLIENTE,
         active: dto.active ?? true,
-        phone:
-          this.normalizeOptional(dto.phone),
-        street:
-          this.normalizeOptional(dto.street),
-        addressNumber:
-          this.normalizeOptional(
-            dto.addressNumber,
-          ),
-        complement:
-          this.normalizeOptional(
-            dto.complement,
-          ),
-        neighborhood:
-          this.normalizeOptional(
-            dto.neighborhood,
-          ),
-        city:
-          this.normalizeOptional(dto.city),
-        state:
-          this.normalizeState(dto.state),
-        zipCode:
-          this.normalizeOptional(
-            dto.zipCode,
-          ),
+        phone: this.normalizeOptional(dto.phone),
+        street: this.normalizeOptional(dto.street),
+        addressNumber: this.normalizeOptional(dto.addressNumber),
+        complement: this.normalizeOptional(dto.complement),
+        neighborhood: this.normalizeOptional(dto.neighborhood),
+        city: this.normalizeOptional(dto.city),
+        state: this.normalizeState(dto.state),
+        zipCode: this.normalizeOptional(dto.zipCode),
       },
       select: this.defaultSelect(),
     });
   }
 
-  async updateMe(
-    clienteId: number,
-    dto: PatchClienteDto,
-  ) {
-    return this.partialUpdate(
-      clienteId,
-      dto,
-    );
+  async updateMe(clienteId: number, dto: PatchClienteDto) {
+    return this.partialUpdate(clienteId, dto);
   }
 
   async updateAdmin(
@@ -231,84 +178,62 @@ export class ClientesService {
     dto: UpdateAdminClienteDto,
     currentAdminId: number,
   ) {
-    const cliente =
-      await this.prisma.cliente.findUnique({
-        where: {
-          id,
-        },
-        select: {
-          id: true,
-          role: true,
-          active: true,
-        },
-      });
+    const cliente = await this.prisma.cliente.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        id: true,
+        role: true,
+        active: true,
+      },
+    });
 
     if (!cliente) {
-      throw new NotFoundException(
-        'Cliente não encontrado.',
-      );
+      throw new NotFoundException('Cliente não encontrado.');
     }
 
-    if (
-      id === currentAdminId &&
-      dto.active === false
-    ) {
+    if (id === currentAdminId && dto.active === false) {
       throw new BadRequestException(
         'Você não pode desativar a própria conta administrativa.',
       );
     }
 
-    if (
-      id === currentAdminId &&
-      dto.role === Role.CLIENTE
-    ) {
+    if (id === currentAdminId && dto.role === Role.CLIENTE) {
       throw new BadRequestException(
         'Você não pode remover o próprio perfil de administrador.',
       );
     }
 
-    const resultingRole =
-      dto.role ?? cliente.role;
+    const resultingRole = dto.role ?? cliente.role;
 
-    const resultingActive =
-      dto.active ?? cliente.active;
+    const resultingActive = dto.active ?? cliente.active;
 
     const isRemovingActiveAdmin =
       cliente.role === Role.ADMIN &&
       cliente.active &&
-      (resultingRole !== Role.ADMIN ||
-        !resultingActive);
+      (resultingRole !== Role.ADMIN || !resultingActive);
 
     if (isRemovingActiveAdmin) {
-      await this.ensureAnotherActiveAdminExists(
-        id,
-      );
+      await this.ensureAnotherActiveAdminExists(id);
     }
 
-    const data: Prisma.ClienteUpdateInput =
-      {};
+    const data: Prisma.ClienteUpdateInput = {};
 
     if (dto.name !== undefined) {
       data.name = dto.name.trim();
     }
 
     if (dto.email !== undefined) {
-      const email =
-        dto.email.trim().toLowerCase();
+      const email = dto.email.trim().toLowerCase();
 
-      await this.ensureEmailIsAvailable(
-        email,
-        id,
-      );
+      await this.ensureEmailIsAvailable(email, id);
 
       data.email = email;
     }
 
     if (dto.password !== undefined) {
-      data.password = await bcrypt.hash(
-        dto.password,
-        10,
-      );
+      data.password = await bcrypt.hash(dto.password, 10);
     }
 
     if (dto.role !== undefined) {
@@ -320,51 +245,35 @@ export class ClientesService {
     }
 
     if (dto.phone !== undefined) {
-      data.phone =
-        this.normalizeOptional(dto.phone);
+      data.phone = this.normalizeOptional(dto.phone);
     }
 
     if (dto.street !== undefined) {
-      data.street =
-        this.normalizeOptional(dto.street);
+      data.street = this.normalizeOptional(dto.street);
     }
 
     if (dto.addressNumber !== undefined) {
-      data.addressNumber =
-        this.normalizeOptional(
-          dto.addressNumber,
-        );
+      data.addressNumber = this.normalizeOptional(dto.addressNumber);
     }
 
     if (dto.complement !== undefined) {
-      data.complement =
-        this.normalizeOptional(
-          dto.complement,
-        );
+      data.complement = this.normalizeOptional(dto.complement);
     }
 
     if (dto.neighborhood !== undefined) {
-      data.neighborhood =
-        this.normalizeOptional(
-          dto.neighborhood,
-        );
+      data.neighborhood = this.normalizeOptional(dto.neighborhood);
     }
 
     if (dto.city !== undefined) {
-      data.city =
-        this.normalizeOptional(dto.city);
+      data.city = this.normalizeOptional(dto.city);
     }
 
     if (dto.state !== undefined) {
-      data.state =
-        this.normalizeState(dto.state);
+      data.state = this.normalizeState(dto.state);
     }
 
     if (dto.zipCode !== undefined) {
-      data.zipCode =
-        this.normalizeOptional(
-          dto.zipCode,
-        );
+      data.zipCode = this.normalizeOptional(dto.zipCode);
     }
 
     return this.prisma.cliente.update({
@@ -376,22 +285,14 @@ export class ClientesService {
     });
   }
 
-  async update(
-    id: number,
-    dto: CreateClienteDto,
-  ) {
-    const email =
-      dto.email.trim().toLowerCase();
+  async update(id: number, dto: CreateClienteDto) {
+    const email = dto.email.trim().toLowerCase();
 
     await this.ensureClienteExists(id);
 
-    await this.ensureEmailIsAvailable(
-      email,
-      id,
-    );
+    await this.ensureEmailIsAvailable(email, id);
 
-    const hashedPassword =
-      await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     return this.prisma.cliente.update({
       where: {
@@ -401,113 +302,70 @@ export class ClientesService {
         name: dto.name.trim(),
         email,
         password: hashedPassword,
-        phone:
-          this.normalizeOptional(dto.phone),
-        street:
-          this.normalizeOptional(dto.street),
-        addressNumber:
-          this.normalizeOptional(
-            dto.addressNumber,
-          ),
-        complement:
-          this.normalizeOptional(
-            dto.complement,
-          ),
-        neighborhood:
-          this.normalizeOptional(
-            dto.neighborhood,
-          ),
-        city:
-          this.normalizeOptional(dto.city),
-        state:
-          this.normalizeState(dto.state),
-        zipCode:
-          this.normalizeOptional(
-            dto.zipCode,
-          ),
+        phone: this.normalizeOptional(dto.phone),
+        street: this.normalizeOptional(dto.street),
+        addressNumber: this.normalizeOptional(dto.addressNumber),
+        complement: this.normalizeOptional(dto.complement),
+        neighborhood: this.normalizeOptional(dto.neighborhood),
+        city: this.normalizeOptional(dto.city),
+        state: this.normalizeState(dto.state),
+        zipCode: this.normalizeOptional(dto.zipCode),
       },
       select: this.defaultSelect(),
     });
   }
 
-  async partialUpdate(
-    id: number,
-    dto: PatchClienteDto,
-  ) {
+  async partialUpdate(id: number, dto: PatchClienteDto) {
     await this.ensureClienteExists(id);
 
-    const data: Prisma.ClienteUpdateInput =
-      {};
+    const data: Prisma.ClienteUpdateInput = {};
 
     if (dto.name !== undefined) {
       data.name = dto.name.trim();
     }
 
     if (dto.email !== undefined) {
-      const email =
-        dto.email.trim().toLowerCase();
+      const email = dto.email.trim().toLowerCase();
 
-      await this.ensureEmailIsAvailable(
-        email,
-        id,
-      );
+      await this.ensureEmailIsAvailable(email, id);
 
       data.email = email;
     }
 
     if (dto.password !== undefined) {
-      data.password = await bcrypt.hash(
-        dto.password,
-        10,
-      );
+      data.password = await bcrypt.hash(dto.password, 10);
     }
 
     if (dto.phone !== undefined) {
-      data.phone =
-        this.normalizeOptional(dto.phone);
+      data.phone = this.normalizeOptional(dto.phone);
     }
 
     if (dto.street !== undefined) {
-      data.street =
-        this.normalizeOptional(dto.street);
+      data.street = this.normalizeOptional(dto.street);
     }
 
     if (dto.addressNumber !== undefined) {
-      data.addressNumber =
-        this.normalizeOptional(
-          dto.addressNumber,
-        );
+      data.addressNumber = this.normalizeOptional(dto.addressNumber);
     }
 
     if (dto.complement !== undefined) {
-      data.complement =
-        this.normalizeOptional(
-          dto.complement,
-        );
+      data.complement = this.normalizeOptional(dto.complement);
     }
 
     if (dto.neighborhood !== undefined) {
-      data.neighborhood =
-        this.normalizeOptional(
-          dto.neighborhood,
-        );
+      data.neighborhood = this.normalizeOptional(dto.neighborhood);
     }
 
     if (dto.city !== undefined) {
-      data.city =
-        this.normalizeOptional(dto.city);
+      data.city = this.normalizeOptional(dto.city);
     }
 
     if (dto.state !== undefined) {
-      data.state =
-        this.normalizeState(dto.state);
+      data.state = this.normalizeState(dto.state);
     }
 
     if (dto.zipCode !== undefined) {
-      data.zipCode =
-        this.normalizeOptional(
-          dto.zipCode,
-        );
+      data.zipCode = this.normalizeOptional(dto.zipCode);
     }
 
     return this.prisma.cliente.update({
@@ -519,31 +377,25 @@ export class ClientesService {
     });
   }
 
-  async delete(
-    id: number,
-    currentAdminId: number,
-  ): Promise<void> {
-    const cliente =
-      await this.prisma.cliente.findUnique({
-        where: {
-          id,
-        },
-        select: {
-          id: true,
-          role: true,
-          active: true,
-          _count: {
-            select: {
-              pedidos: true,
-            },
+  async delete(id: number, currentAdminId: number): Promise<void> {
+    const cliente = await this.prisma.cliente.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        id: true,
+        role: true,
+        active: true,
+        _count: {
+          select: {
+            pedidos: true,
           },
         },
-      });
+      },
+    });
 
     if (!cliente) {
-      throw new NotFoundException(
-        'Cliente não encontrado.',
-      );
+      throw new NotFoundException('Cliente não encontrado.');
     }
 
     if (id === currentAdminId) {
@@ -552,13 +404,8 @@ export class ClientesService {
       );
     }
 
-    if (
-      cliente.role === Role.ADMIN &&
-      cliente.active
-    ) {
-      await this.ensureAnotherActiveAdminExists(
-        id,
-      );
+    if (cliente.role === Role.ADMIN && cliente.active) {
+      await this.ensureAnotherActiveAdminExists(id);
     }
 
     if (cliente._count.pedidos > 0) {
@@ -574,8 +421,7 @@ export class ClientesService {
       });
     } catch (error) {
       if (
-        error instanceof
-          Prisma.PrismaClientKnownRequestError &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2003'
       ) {
         await this.deactivateCliente(id);
@@ -586,23 +432,18 @@ export class ClientesService {
     }
   }
 
-  private async ensureClienteExists(
-    id: number,
-  ): Promise<void> {
-    const cliente =
-      await this.prisma.cliente.findUnique({
-        where: {
-          id,
-        },
-        select: {
-          id: true,
-        },
-      });
+  private async ensureClienteExists(id: number): Promise<void> {
+    const cliente = await this.prisma.cliente.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        id: true,
+      },
+    });
 
     if (!cliente) {
-      throw new NotFoundException(
-        'Cliente não encontrado.',
-      );
+      throw new NotFoundException('Cliente não encontrado.');
     }
   }
 
@@ -610,42 +451,36 @@ export class ClientesService {
     email: string,
     ignoreClienteId?: number,
   ): Promise<void> {
-    const cliente =
-      await this.prisma.cliente.findFirst({
-        where: {
-          email,
-          NOT:
-            ignoreClienteId !== undefined
-              ? {
-                  id: ignoreClienteId,
-                }
-              : undefined,
-        },
-        select: {
-          id: true,
-        },
-      });
+    const cliente = await this.prisma.cliente.findFirst({
+      where: {
+        email,
+        NOT:
+          ignoreClienteId !== undefined
+            ? {
+                id: ignoreClienteId,
+              }
+            : undefined,
+      },
+      select: {
+        id: true,
+      },
+    });
 
     if (cliente) {
-      throw new ConflictException(
-        'Este e-mail já está em uso.',
-      );
+      throw new ConflictException('Este e-mail já está em uso.');
     }
   }
 
-  private async ensureAnotherActiveAdminExists(
-    adminId: number,
-  ): Promise<void> {
-    const otherActiveAdmins =
-      await this.prisma.cliente.count({
-        where: {
-          id: {
-            not: adminId,
-          },
-          role: Role.ADMIN,
-          active: true,
+  private async ensureAnotherActiveAdminExists(adminId: number): Promise<void> {
+    const otherActiveAdmins = await this.prisma.cliente.count({
+      where: {
+        id: {
+          not: adminId,
         },
-      });
+        role: Role.ADMIN,
+        active: true,
+      },
+    });
 
     if (otherActiveAdmins === 0) {
       throw new ConflictException(
@@ -654,9 +489,7 @@ export class ClientesService {
     }
   }
 
-  private async deactivateCliente(
-    id: number,
-  ): Promise<void> {
+  private async deactivateCliente(id: number): Promise<void> {
     await this.prisma.cliente.update({
       where: {
         id,
@@ -667,26 +500,16 @@ export class ClientesService {
     });
   }
 
-  private normalizeOptional(
-    value?: string,
-  ): string | null {
-    const normalizedValue =
-      value?.trim();
+  private normalizeOptional(value?: string): string | null {
+    const normalizedValue = value?.trim();
 
-    return normalizedValue
-      ? normalizedValue
-      : null;
+    return normalizedValue ? normalizedValue : null;
   }
 
-  private normalizeState(
-    value?: string,
-  ): string | null {
-    const normalizedState =
-      value?.trim().toUpperCase();
+  private normalizeState(value?: string): string | null {
+    const normalizedState = value?.trim().toUpperCase();
 
-    return normalizedState
-      ? normalizedState
-      : null;
+    return normalizedState ? normalizedState : null;
   }
 
   private defaultSelect() {

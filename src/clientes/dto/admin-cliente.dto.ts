@@ -1,10 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { Role } from '@prisma/client';
-import {
-  IsBoolean,
-  IsEnum,
-  IsOptional,
-} from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
 import { CreateClienteDto } from './create-cliente.dto';
 
 export class CreateAdminClienteDto extends CreateClienteDto {
@@ -21,6 +17,4 @@ export class CreateAdminClienteDto extends CreateClienteDto {
   active?: boolean;
 }
 
-export class UpdateAdminClienteDto extends PartialType(
-  CreateAdminClienteDto,
-) {}
+export class UpdateAdminClienteDto extends PartialType(CreateAdminClienteDto) {}

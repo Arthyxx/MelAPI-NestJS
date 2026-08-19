@@ -13,11 +13,7 @@ import {
 
 class EnvironmentVariables {
   @IsOptional()
-  @IsIn([
-    'development',
-    'production',
-    'test',
-  ])
+  @IsIn(['development', 'production', 'test'])
   NODE_ENV: string = 'development';
 
   @IsString()
@@ -27,8 +23,7 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   @MinLength(32, {
-    message:
-      'JWT_SECRET deve ter pelo menos 32 caracteres.',
+    message: 'JWT_SECRET deve ter pelo menos 32 caracteres.',
   })
   JWT_SECRET!: string;
 
@@ -60,43 +55,25 @@ class EnvironmentVariables {
   CLOUDINARY_API_SECRET!: string;
 }
 
-export function validateEnvironment(
-  config: Record<string, unknown>,
-) {
-  const validatedConfig =
-    plainToInstance(
-      EnvironmentVariables,
-      config,
-      {
-        enableImplicitConversion:
-          true,
-      },
-    );
+export function validateEnvironment(config: Record<string, unknown>) {
+  const validatedConfig = plainToInstance(EnvironmentVariables, config, {
+    enableImplicitConversion: true,
+  });
 
-  const errors = validateSync(
-    validatedConfig,
-    {
-      skipMissingProperties: false,
-    },
-  );
+  const errors = validateSync(validatedConfig, {
+    skipMissingProperties: false,
+  });
 
   if (errors.length > 0) {
     const messages = errors
-      .flatMap((error) =>
-        Object.values(
-          error.constraints ?? {},
-        ),
-      )
+      .flatMap((error) => Object.values(error.constraints ?? {}))
       .join('; ');
 
-    throw new Error(
-      `Configuração de ambiente inválida: ${messages}`,
-    );
+    throw new Error(`Configuração de ambiente inválida: ${messages}`);
   }
 
   if (
-    validatedConfig.NODE_ENV ===
-      'production' &&
+    validatedConfig.NODE_ENV === 'production' &&
     !validatedConfig.FRONTEND_URL
   ) {
     throw new Error(

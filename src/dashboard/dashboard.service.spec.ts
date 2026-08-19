@@ -1,7 +1,4 @@
-import {
-  Test,
-  TestingModule,
-} from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 
 import { DashboardService } from './dashboard.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -30,26 +27,20 @@ describe('DashboardService', () => {
     jest.clearAllMocks();
 
     prismaMock.$transaction.mockImplementation(
-      async (
-        operations: Promise<unknown>[],
-      ) => Promise.all(operations),
+      async (operations: Promise<unknown>[]) => Promise.all(operations),
     );
 
-    const module: TestingModule =
-      await Test.createTestingModule({
-        providers: [
-          DashboardService,
-          {
-            provide: PrismaService,
-            useValue: prismaMock,
-          },
-        ],
-      }).compile();
-
-    service =
-      module.get<DashboardService>(
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
         DashboardService,
-      );
+        {
+          provide: PrismaService,
+          useValue: prismaMock,
+        },
+      ],
+    }).compile();
+
+    service = module.get<DashboardService>(DashboardService);
   });
 
   it('deve estar definido', () => {
@@ -57,17 +48,11 @@ describe('DashboardService', () => {
   });
 
   it('deve retornar o resumo administrativo', async () => {
-    prismaMock.cliente.count.mockResolvedValue(
-      3,
-    );
+    prismaMock.cliente.count.mockResolvedValue(3);
 
-    prismaMock.categoria.count.mockResolvedValue(
-      2,
-    );
+    prismaMock.categoria.count.mockResolvedValue(2);
 
-    prismaMock.produto.count
-      .mockResolvedValueOnce(4)
-      .mockResolvedValueOnce(1);
+    prismaMock.produto.count.mockResolvedValueOnce(4).mockResolvedValueOnce(1);
 
     prismaMock.pedido.count
       .mockResolvedValueOnce(10)
@@ -75,18 +60,15 @@ describe('DashboardService', () => {
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(1);
 
-    prismaMock.pedido.aggregate.mockResolvedValue(
-      {
-        _sum: {
-          total: 325.9,
-          totalPrice: 325.9,
-          valorTotal: 325.9,
-        },
+    prismaMock.pedido.aggregate.mockResolvedValue({
+      _sum: {
+        total: 325.9,
+        totalPrice: 325.9,
+        valorTotal: 325.9,
       },
-    );
+    });
 
-    const result =
-      await service.getSummary();
+    const result = await service.getSummary();
 
     expect(result).toEqual({
       clientes: {
@@ -110,23 +92,15 @@ describe('DashboardService', () => {
       },
     });
 
-    expect(
-      prismaMock.$transaction,
-    ).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it('deve retornar faturamento zero quando não houver vendas', async () => {
-    prismaMock.cliente.count.mockResolvedValue(
-      0,
-    );
+    prismaMock.cliente.count.mockResolvedValue(0);
 
-    prismaMock.categoria.count.mockResolvedValue(
-      0,
-    );
+    prismaMock.categoria.count.mockResolvedValue(0);
 
-    prismaMock.produto.count
-      .mockResolvedValueOnce(0)
-      .mockResolvedValueOnce(0);
+    prismaMock.produto.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
 
     prismaMock.pedido.count
       .mockResolvedValueOnce(0)
@@ -134,21 +108,16 @@ describe('DashboardService', () => {
       .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(0);
 
-    prismaMock.pedido.aggregate.mockResolvedValue(
-      {
-        _sum: {
-          total: null,
-          totalPrice: null,
-          valorTotal: null,
-        },
+    prismaMock.pedido.aggregate.mockResolvedValue({
+      _sum: {
+        total: null,
+        totalPrice: null,
+        valorTotal: null,
       },
-    );
+    });
 
-    const result =
-      await service.getSummary();
+    const result = await service.getSummary();
 
-    expect(
-      result.faturamento.total,
-    ).toBe(0);
+    expect(result.faturamento.total).toBe(0);
   });
 });

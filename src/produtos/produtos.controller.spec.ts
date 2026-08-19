@@ -1,7 +1,4 @@
-import {
-  Test,
-  TestingModule,
-} from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { ProdutosController } from './produtos.controller';
@@ -11,30 +8,24 @@ describe('ProdutosController', () => {
   let controller: ProdutosController;
 
   beforeEach(async () => {
-    const module: TestingModule =
-      await Test.createTestingModule({
-        controllers: [
-          ProdutosController,
-        ],
-        providers: [
-          {
-            provide: ProdutosService,
-            useValue: {},
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [ProdutosController],
+      providers: [
+        {
+          provide: ProdutosService,
+          useValue: {},
+        },
+        {
+          provide: CloudinaryService,
+          useValue: {
+            uploadImage: jest.fn(),
+            deleteImage: jest.fn(),
           },
-          {
-            provide: CloudinaryService,
-            useValue: {
-              uploadImage: jest.fn(),
-              deleteImage: jest.fn(),
-            },
-          },
-        ],
-      }).compile();
+        },
+      ],
+    }).compile();
 
-    controller =
-      module.get<ProdutosController>(
-        ProdutosController,
-      );
+    controller = module.get<ProdutosController>(ProdutosController);
   });
 
   it('should be defined', () => {

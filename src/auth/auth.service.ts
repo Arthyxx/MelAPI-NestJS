@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,40 +12,32 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto) {
-    const email =
-      dto.email.trim().toLowerCase();
+    const email = dto.email.trim().toLowerCase();
 
-    const cliente =
-      await this.prisma.cliente.findUnique({
-        where: {
-          email,
-        },
-      });
+    const cliente = await this.prisma.cliente.findUnique({
+      where: {
+        email,
+      },
+    });
 
     if (!cliente || !cliente.active) {
-      throw new UnauthorizedException(
-        'E-mail ou senha inválidos.',
-      );
+      throw new UnauthorizedException('E-mail ou senha inválidos.');
     }
 
-    const passwordMatches =
-      await bcrypt.compare(
-        dto.password,
-        cliente.password,
-      );
+    const passwordMatches = await bcrypt.compare(
+      dto.password,
+      cliente.password,
+    );
 
     if (!passwordMatches) {
-      throw new UnauthorizedException(
-        'E-mail ou senha inválidos.',
-      );
+      throw new UnauthorizedException('E-mail ou senha inválidos.');
     }
 
-    const token =
-      await this.jwtService.signAsync({
-        sub: cliente.id,
-        email: cliente.email,
-        role: cliente.role,
-      });
+    const token = await this.jwtService.signAsync({
+      sub: cliente.id,
+      email: cliente.email,
+      role: cliente.role,
+    });
 
     return {
       token,

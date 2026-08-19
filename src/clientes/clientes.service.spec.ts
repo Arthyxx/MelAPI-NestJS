@@ -1,11 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-} from '@nestjs/common';
-import {
-  Test,
-  TestingModule,
-} from '@nestjs/testing';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClientesService } from './clientes.service';
@@ -29,21 +23,17 @@ describe('ClientesService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    const module: TestingModule =
-      await Test.createTestingModule({
-        providers: [
-          ClientesService,
-          {
-            provide: PrismaService,
-            useValue: prismaMock,
-          },
-        ],
-      }).compile();
-
-    service =
-      module.get<ClientesService>(
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
         ClientesService,
-      );
+        {
+          provide: PrismaService,
+          useValue: prismaMock,
+        },
+      ],
+    }).compile();
+
+    service = module.get<ClientesService>(ClientesService);
   });
 
   it('should be defined', () => {
@@ -65,13 +55,9 @@ describe('ClientesService', () => {
         },
         2,
       ),
-    ).rejects.toThrow(
-      BadRequestException,
-    );
+    ).rejects.toThrow(BadRequestException);
 
-    expect(
-      prismaMock.cliente.update,
-    ).not.toHaveBeenCalled();
+    expect(prismaMock.cliente.update).not.toHaveBeenCalled();
   });
 
   it('não deve permitir que o administrador remova o próprio perfil ADMIN', async () => {
@@ -89,13 +75,9 @@ describe('ClientesService', () => {
         },
         2,
       ),
-    ).rejects.toThrow(
-      BadRequestException,
-    );
+    ).rejects.toThrow(BadRequestException);
 
-    expect(
-      prismaMock.cliente.update,
-    ).not.toHaveBeenCalled();
+    expect(prismaMock.cliente.update).not.toHaveBeenCalled();
   });
 
   it('não deve permitir excluir a própria conta administrativa', async () => {
@@ -108,15 +90,9 @@ describe('ClientesService', () => {
       },
     });
 
-    await expect(
-      service.delete(2, 2),
-    ).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(service.delete(2, 2)).rejects.toThrow(BadRequestException);
 
-    expect(
-      prismaMock.cliente.delete,
-    ).not.toHaveBeenCalled();
+    expect(prismaMock.cliente.delete).not.toHaveBeenCalled();
   });
 
   it('não deve permitir desativar o último administrador ativo', async () => {
@@ -126,9 +102,7 @@ describe('ClientesService', () => {
       active: true,
     });
 
-    prismaMock.cliente.count.mockResolvedValue(
-      0,
-    );
+    prismaMock.cliente.count.mockResolvedValue(0);
 
     await expect(
       service.updateAdmin(
@@ -138,13 +112,9 @@ describe('ClientesService', () => {
         },
         2,
       ),
-    ).rejects.toThrow(
-      ConflictException,
-    );
+    ).rejects.toThrow(ConflictException);
 
-    expect(
-      prismaMock.cliente.count,
-    ).toHaveBeenCalledWith({
+    expect(prismaMock.cliente.count).toHaveBeenCalledWith({
       where: {
         id: {
           not: 7,
@@ -154,9 +124,7 @@ describe('ClientesService', () => {
       },
     });
 
-    expect(
-      prismaMock.cliente.update,
-    ).not.toHaveBeenCalled();
+    expect(prismaMock.cliente.update).not.toHaveBeenCalled();
   });
 
   it('deve permitir desativar um administrador quando existe outro ativo', async () => {
@@ -166,9 +134,7 @@ describe('ClientesService', () => {
       active: true,
     });
 
-    prismaMock.cliente.count.mockResolvedValue(
-      1,
-    );
+    prismaMock.cliente.count.mockResolvedValue(1);
 
     prismaMock.cliente.update.mockResolvedValue({
       id: 7,
@@ -178,18 +144,15 @@ describe('ClientesService', () => {
       active: false,
     });
 
-    const result =
-      await service.updateAdmin(
-        7,
-        {
-          active: false,
-        },
-        2,
-      );
+    const result = await service.updateAdmin(
+      7,
+      {
+        active: false,
+      },
+      2,
+    );
 
-    expect(
-      prismaMock.cliente.update,
-    ).toHaveBeenCalled();
+    expect(prismaMock.cliente.update).toHaveBeenCalled();
 
     expect(result.active).toBe(false);
   });

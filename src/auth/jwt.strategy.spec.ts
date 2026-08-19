@@ -1,6 +1,4 @@
-import {
-  UnauthorizedException,
-} from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Role } from '@prisma/client';
 
@@ -24,11 +22,7 @@ describe('JwtStrategy', () => {
     };
 
     const configService = {
-      get: jest
-        .fn()
-        .mockReturnValue(
-          'segredo-jwt-de-teste',
-        ),
+      get: jest.fn().mockReturnValue('segredo-jwt-de-teste'),
     };
 
     strategy = new JwtStrategy(
@@ -48,21 +42,13 @@ describe('JwtStrategy', () => {
         email: 'teste@teste.com',
         role: Role.CLIENTE,
       }),
-    ).rejects.toThrow(
-      new UnauthorizedException(
-        'Token inválido.',
-      ),
-    );
+    ).rejects.toThrow(new UnauthorizedException('Token inválido.'));
 
-    expect(
-      prisma.cliente.findUnique,
-    ).not.toHaveBeenCalled();
+    expect(prisma.cliente.findUnique).not.toHaveBeenCalled();
   });
 
   it('deve rejeitar token quando o usuário não existir mais', async () => {
-    prisma.cliente.findUnique.mockResolvedValue(
-      null,
-    );
+    prisma.cliente.findUnique.mockResolvedValue(null);
 
     await expect(
       strategy.validate({
@@ -70,11 +56,7 @@ describe('JwtStrategy', () => {
         email: 'teste@teste.com',
         role: Role.CLIENTE,
       }),
-    ).rejects.toThrow(
-      new UnauthorizedException(
-        'Usuário não encontrado.',
-      ),
-    );
+    ).rejects.toThrow(new UnauthorizedException('Usuário não encontrado.'));
   });
 
   it('deve rejeitar token de conta desativada', async () => {
@@ -91,11 +73,7 @@ describe('JwtStrategy', () => {
         email: 'teste@teste.com',
         role: Role.CLIENTE,
       }),
-    ).rejects.toThrow(
-      new UnauthorizedException(
-        'Esta conta está desativada.',
-      ),
-    );
+    ).rejects.toThrow(new UnauthorizedException('Esta conta está desativada.'));
   });
 
   it('deve retornar os dados atuais do banco para uma conta válida', async () => {
@@ -106,16 +84,13 @@ describe('JwtStrategy', () => {
       active: true,
     });
 
-    const result =
-      await strategy.validate({
-        sub: 10,
-        email: 'antigo@teste.com',
-        role: Role.CLIENTE,
-      });
+    const result = await strategy.validate({
+      sub: 10,
+      email: 'antigo@teste.com',
+      role: Role.CLIENTE,
+    });
 
-    expect(
-      prisma.cliente.findUnique,
-    ).toHaveBeenCalledWith({
+    expect(prisma.cliente.findUnique).toHaveBeenCalledWith({
       where: {
         id: 10,
       },

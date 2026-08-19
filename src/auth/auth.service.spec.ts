@@ -1,6 +1,4 @@
-import {
-  UnauthorizedException,
-} from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -25,8 +23,7 @@ describe('AuthService', () => {
     signAsync: jest.Mock;
   };
 
-  const bcryptCompareMock =
-    bcrypt.compare as jest.Mock;
+  const bcryptCompareMock = bcrypt.compare as jest.Mock;
 
   beforeEach(() => {
     prisma = {
@@ -52,37 +49,24 @@ describe('AuthService', () => {
   });
 
   it('deve rejeitar login quando o e-mail não existe', async () => {
-    prisma.cliente.findUnique.mockResolvedValue(
-      null,
-    );
+    prisma.cliente.findUnique.mockResolvedValue(null);
 
     await expect(
       service.login({
         email: 'inexistente@teste.com',
         password: '123456',
       }),
-    ).rejects.toThrow(
-      new UnauthorizedException(
-        'E-mail ou senha inválidos.',
-      ),
-    );
+    ).rejects.toThrow(new UnauthorizedException('E-mail ou senha inválidos.'));
 
-    expect(
-      prisma.cliente.findUnique,
-    ).toHaveBeenCalledWith({
+    expect(prisma.cliente.findUnique).toHaveBeenCalledWith({
       where: {
-        email:
-          'inexistente@teste.com',
+        email: 'inexistente@teste.com',
       },
     });
 
-    expect(
-      bcryptCompareMock,
-    ).not.toHaveBeenCalled();
+    expect(bcryptCompareMock).not.toHaveBeenCalled();
 
-    expect(
-      jwtService.signAsync,
-    ).not.toHaveBeenCalled();
+    expect(jwtService.signAsync).not.toHaveBeenCalled();
   });
 
   it('deve rejeitar login de conta inativa', async () => {
@@ -100,19 +84,11 @@ describe('AuthService', () => {
         email: 'inativo@teste.com',
         password: '123456',
       }),
-    ).rejects.toThrow(
-      new UnauthorizedException(
-        'E-mail ou senha inválidos.',
-      ),
-    );
+    ).rejects.toThrow(new UnauthorizedException('E-mail ou senha inválidos.'));
 
-    expect(
-      bcryptCompareMock,
-    ).not.toHaveBeenCalled();
+    expect(bcryptCompareMock).not.toHaveBeenCalled();
 
-    expect(
-      jwtService.signAsync,
-    ).not.toHaveBeenCalled();
+    expect(jwtService.signAsync).not.toHaveBeenCalled();
   });
 
   it('deve rejeitar login quando a senha estiver incorreta', async () => {
@@ -125,54 +101,36 @@ describe('AuthService', () => {
       active: true,
     });
 
-    bcryptCompareMock.mockResolvedValue(
-      false,
-    );
+    bcryptCompareMock.mockResolvedValue(false);
 
     await expect(
       service.login({
         email: 'cliente@teste.com',
         password: 'senha-errada',
       }),
-    ).rejects.toThrow(
-      new UnauthorizedException(
-        'E-mail ou senha inválidos.',
-      ),
-    );
+    ).rejects.toThrow(new UnauthorizedException('E-mail ou senha inválidos.'));
 
-    expect(
-      bcryptCompareMock,
-    ).toHaveBeenCalledWith(
+    expect(bcryptCompareMock).toHaveBeenCalledWith(
       'senha-errada',
       'hash-salvo',
     );
 
-    expect(
-      jwtService.signAsync,
-    ).not.toHaveBeenCalled();
+    expect(jwtService.signAsync).not.toHaveBeenCalled();
   });
 
   it('deve normalizar o e-mail antes de buscar o usuário', async () => {
-    prisma.cliente.findUnique.mockResolvedValue(
-      null,
-    );
+    prisma.cliente.findUnique.mockResolvedValue(null);
 
     await expect(
       service.login({
-        email:
-          '  CLIENTE@TESTE.COM  ',
+        email: '  CLIENTE@TESTE.COM  ',
         password: '123456',
       }),
-    ).rejects.toThrow(
-      UnauthorizedException,
-    );
+    ).rejects.toThrow(UnauthorizedException);
 
-    expect(
-      prisma.cliente.findUnique,
-    ).toHaveBeenCalledWith({
+    expect(prisma.cliente.findUnique).toHaveBeenCalledWith({
       where: {
-        email:
-          'cliente@teste.com',
+        email: 'cliente@teste.com',
       },
     });
   });
@@ -187,38 +145,25 @@ describe('AuthService', () => {
       active: true,
     });
 
-    bcryptCompareMock.mockResolvedValue(
-      true,
-    );
+    bcryptCompareMock.mockResolvedValue(true);
 
-    jwtService.signAsync.mockResolvedValue(
-      'token-jwt-teste',
-    );
+    jwtService.signAsync.mockResolvedValue('token-jwt-teste');
 
-    const result =
-      await service.login({
-        email:
-          '  CLIENTE@TESTE.COM ',
-        password: 'senha-correta',
-      });
+    const result = await service.login({
+      email: '  CLIENTE@TESTE.COM ',
+      password: 'senha-correta',
+    });
 
-    expect(
-      bcryptCompareMock,
-    ).toHaveBeenCalledWith(
+    expect(bcryptCompareMock).toHaveBeenCalledWith(
       'senha-correta',
       'hash-salvo',
     );
 
-    expect(
-      jwtService.signAsync,
-    ).toHaveBeenCalledTimes(1);
+    expect(jwtService.signAsync).toHaveBeenCalledTimes(1);
 
-    expect(
-      jwtService.signAsync,
-    ).toHaveBeenCalledWith({
+    expect(jwtService.signAsync).toHaveBeenCalledWith({
       sub: 10,
-      email:
-        'cliente@teste.com',
+      email: 'cliente@teste.com',
       role: Role.CLIENTE,
     });
 
@@ -227,8 +172,7 @@ describe('AuthService', () => {
       user: {
         id: 10,
         name: 'Cliente Teste',
-        email:
-          'cliente@teste.com',
+        email: 'cliente@teste.com',
         role: Role.CLIENTE,
         active: true,
       },
