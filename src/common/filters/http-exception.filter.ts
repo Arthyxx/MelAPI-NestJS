@@ -5,7 +5,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 
 interface ErrorResponse {
   message?: string | string[];
@@ -25,7 +25,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const status =
       exception instanceof HttpException
         ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+        : Number(HttpStatus.INTERNAL_SERVER_ERROR);
 
     const exceptionResponse =
       exception instanceof HttpException ? exception.getResponse() : null;
@@ -45,7 +45,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     exceptionResponse: string | object | null,
     status: number,
   ) {
-    if (status === HttpStatus.TOO_MANY_REQUESTS) {
+    if (status === Number(HttpStatus.TOO_MANY_REQUESTS)) {
       return {
         message: 'Muitas requisições. Aguarde um momento e tente novamente.',
         error: 'Too Many Requests',
@@ -66,6 +66,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message: Array.isArray(response.message)
           ? response.message
           : response.message || this.getDefaultMessage(status),
+
         error: response.error || this.getDefaultError(status),
       };
     }
@@ -78,22 +79,22 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
   private getDefaultMessage(status: number) {
     switch (status) {
-      case HttpStatus.BAD_REQUEST:
+      case Number(HttpStatus.BAD_REQUEST):
         return 'Requisição inválida.';
 
-      case HttpStatus.UNAUTHORIZED:
+      case Number(HttpStatus.UNAUTHORIZED):
         return 'Não autorizado.';
 
-      case HttpStatus.FORBIDDEN:
+      case Number(HttpStatus.FORBIDDEN):
         return 'Acesso negado.';
 
-      case HttpStatus.NOT_FOUND:
+      case Number(HttpStatus.NOT_FOUND):
         return 'Recurso não encontrado.';
 
-      case HttpStatus.CONFLICT:
+      case Number(HttpStatus.CONFLICT):
         return 'Conflito na requisição.';
 
-      case HttpStatus.TOO_MANY_REQUESTS:
+      case Number(HttpStatus.TOO_MANY_REQUESTS):
         return 'Muitas requisições. Aguarde um momento e tente novamente.';
 
       default:
@@ -103,22 +104,22 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
   private getDefaultError(status: number) {
     switch (status) {
-      case HttpStatus.BAD_REQUEST:
+      case Number(HttpStatus.BAD_REQUEST):
         return 'Bad Request';
 
-      case HttpStatus.UNAUTHORIZED:
+      case Number(HttpStatus.UNAUTHORIZED):
         return 'Unauthorized';
 
-      case HttpStatus.FORBIDDEN:
+      case Number(HttpStatus.FORBIDDEN):
         return 'Forbidden';
 
-      case HttpStatus.NOT_FOUND:
+      case Number(HttpStatus.NOT_FOUND):
         return 'Not Found';
 
-      case HttpStatus.CONFLICT:
+      case Number(HttpStatus.CONFLICT):
         return 'Conflict';
 
-      case HttpStatus.TOO_MANY_REQUESTS:
+      case Number(HttpStatus.TOO_MANY_REQUESTS):
         return 'Too Many Requests';
 
       default:

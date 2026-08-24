@@ -1,4 +1,5 @@
-import { Transform, Type } from 'class-transformer';
+import { Role } from '@prisma/client';
+import { Transform, type TransformFnParams, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEnum,
@@ -9,7 +10,6 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { Role } from '@prisma/client';
 
 export class ClienteFilterDto {
   @IsOptional()
@@ -51,16 +51,18 @@ export class ClienteFilterDto {
   role?: Role;
 
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true') {
+  @Transform(({ value }: TransformFnParams) => {
+    const rawValue: unknown = value;
+
+    if (rawValue === 'true') {
       return true;
     }
 
-    if (value === 'false') {
+    if (rawValue === 'false') {
       return false;
     }
 
-    return value;
+    return rawValue;
   })
   @IsBoolean({
     message: 'O campo ativo deve ser verdadeiro ou falso.',

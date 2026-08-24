@@ -1,4 +1,4 @@
-import { Transform, Type } from 'class-transformer';
+import { Transform, type TransformFnParams, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
@@ -43,16 +43,18 @@ export class CategoriaFilterDto {
   search?: string;
 
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true') {
+  @Transform(({ value }: TransformFnParams) => {
+    const rawValue: unknown = value;
+
+    if (rawValue === 'true') {
       return true;
     }
 
-    if (value === 'false') {
+    if (rawValue === 'false') {
       return false;
     }
 
-    return value;
+    return rawValue;
   })
   @IsBoolean({
     message: 'O status ativo deve ser verdadeiro ou falso.',

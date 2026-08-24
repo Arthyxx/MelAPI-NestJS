@@ -2,10 +2,19 @@ import { ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
 
 import { HttpExceptionFilter } from './http-exception.filter';
 
+interface FilterResponseBody {
+  statusCode: number;
+  message: string | string[];
+  error: string;
+  timestamp: string;
+  path: string;
+}
+
 describe('HttpExceptionFilter', () => {
   let filter: HttpExceptionFilter;
 
-  const jsonMock = jest.fn();
+  const jsonMock = jest.fn((body: FilterResponseBody) => body);
+
   const statusMock = jest.fn(() => ({
     json: jsonMock,
   }));
@@ -47,9 +56,12 @@ describe('HttpExceptionFilter', () => {
         message: 'Muitas requisições. Aguarde um momento e tente novamente.',
         error: 'Too Many Requests',
         path: '/api/teste',
-        timestamp: expect.any(String),
       }),
     );
+
+    const responseBody = jsonMock.mock.calls[0][0];
+
+    expect(typeof responseBody.timestamp).toBe('string');
   });
 
   it('deve preservar mensagem de uma HttpException conhecida', () => {

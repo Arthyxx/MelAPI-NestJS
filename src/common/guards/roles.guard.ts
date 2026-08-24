@@ -7,11 +7,17 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Role } from '@prisma/client';
-import { AuthUser } from '../types/auth-user.type';
+import type { Request } from 'express';
+
+import type { AuthUser } from '../types/auth-user.type';
 
 export const ROLES_KEY = 'roles';
 
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
+
+type AuthenticatedRequest = Request & {
+  user?: AuthUser;
+};
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -27,8 +33,9 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
-    const user = request.user as AuthUser | undefined;
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+
+    const user = request.user;
 
     if (!user) {
       throw new ForbiddenException('Usuário não autenticado.');

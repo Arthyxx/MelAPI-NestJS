@@ -129,7 +129,8 @@ describe('PedidosService', () => {
     };
 
     prisma.$transaction.mockImplementation(
-      async (callback: (transaction: typeof tx) => unknown) => callback(tx),
+      (callback: (transaction: typeof tx) => unknown) =>
+        Promise.resolve(callback(tx)),
     );
 
     const dto = {
@@ -215,7 +216,8 @@ describe('PedidosService', () => {
     };
 
     prisma.$transaction.mockImplementation(
-      async (callback: (transaction: typeof tx) => unknown) => callback(tx),
+      (callback: (transaction: typeof tx) => unknown) =>
+        Promise.resolve(callback(tx)),
     );
 
     await expect(
@@ -302,7 +304,8 @@ describe('PedidosService', () => {
     };
 
     prisma.$transaction.mockImplementation(
-      async (callback: (transaction: typeof tx) => unknown) => callback(tx),
+      (callback: (transaction: typeof tx) => unknown) =>
+        Promise.resolve(callback(tx)),
     );
 
     const result = await service.updateStatus(1, {
