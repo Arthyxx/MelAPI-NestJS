@@ -62,16 +62,22 @@ model Categoria {
 }
 
 model Produto {
-  id            Int      @id @default(autoincrement())
-  name          String   @unique @db.VarChar(120)
-  description   String?  @db.Text
-  price         Decimal  @db.Decimal(10, 2)
+  id            Int     @id @default(autoincrement())
+  name          String  @unique @db.VarChar(120)
+  description   String? @db.Text
+  price         Decimal @db.Decimal(10, 2)
   stockQuantity Int
-  imageUrl      String?  @db.VarChar(500)
-  imagePublicId String?  @db.VarChar(500)
-  active        Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  imageUrl      String? @db.VarChar(500)
+  imagePublicId String? @db.VarChar(500)
+
+  weightKg Decimal? @db.Decimal(8, 3)
+  heightCm Decimal? @db.Decimal(8, 2)
+  widthCm  Decimal? @db.Decimal(8, 2)
+  lengthCm Decimal? @db.Decimal(8, 2)
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   categoryId Int
   category   Categoria @relation(fields: [categoryId], references: [id])

@@ -44,6 +44,67 @@ export class PutProdutoDto {
   @MaxLength(500)
   imagePublicId?: string;
 
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber(
+    {
+      maxDecimalPlaces: 3,
+    },
+    {
+      message: 'O peso deve ser um número com no máximo 3 casas decimais.',
+    },
+  )
+  @IsPositive({
+    message: 'O peso deve ser maior que zero.',
+  })
+  weightKg?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber(
+    {
+      maxDecimalPlaces: 2,
+    },
+    {
+      message: 'A altura deve ser um número com no máximo 2 casas decimais.',
+    },
+  )
+  @IsPositive({
+    message: 'A altura deve ser maior que zero.',
+  })
+  heightCm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber(
+    {
+      maxDecimalPlaces: 2,
+    },
+    {
+      message: 'A largura deve ser um número com no máximo 2 casas decimais.',
+    },
+  )
+  @IsPositive({
+    message: 'A largura deve ser maior que zero.',
+  })
+  widthCm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber(
+    {
+      maxDecimalPlaces: 2,
+    },
+    {
+      message:
+        'O comprimento deve ser um número com no máximo 2 casas decimais.',
+    },
+  )
+  @IsPositive({
+    message: 'O comprimento deve ser maior que zero.',
+  })
+  lengthCm?: number;
+
   @Type(() => Number)
   @IsInt()
   categoryId!: number;

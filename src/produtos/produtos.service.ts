@@ -1,25 +1,28 @@
 import {
   ConflictException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { PatchProdutoDto } from './dto/patch-produto.dto';
 import { ProdutoFilterDto } from './dto/produto-filter.dto';
 import { PutProdutoDto } from './dto/put-produto.dto';
+import { ProdutoImageService } from './produto-image.service';
+import {
+  buildProdutoOrderBy,
+  buildProdutoShippingData,
+  buildProdutoShippingPatch,
+  toProdutoResponse,
+} from './produto.utils';
 
 @Injectable()
 export class ProdutosService {
-  private readonly logger = new Logger(ProdutosService.name);
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly cloudinaryService: CloudinaryService,
+    private readonly produtoImageService: ProdutoImageService,
   ) {}
 
   async findAllPublic(filter: ProdutoFilterDto) {
@@ -43,7 +46,7 @@ export class ProdutosService {
 
     const produtos = await this.prisma.produto.findMany({
       where,
-      orderBy: this.buildOrderBy(filter.sort),
+      orderBy: buildProdutoOrderBy(filter.sort),
       include: {
         category: {
           select: {
@@ -59,7 +62,7 @@ export class ProdutosService {
       },
     });
 
-    return produtos.map((produto) => this.toResponse(produto));
+    return produtos.map(toProdutoResponse);
   }
 
   async findAllAdmin(filter: ProdutoFilterDto) {
@@ -89,7 +92,7 @@ export class ProdutosService {
         where,
         skip,
         take: limit,
-        orderBy: this.buildOrderBy(filter.sort),
+        orderBy: buildProdutoOrderBy(filter.sort),
         include: {
           category: {
             select: {
@@ -113,7 +116,7 @@ export class ProdutosService {
     const totalPages = Math.max(1, Math.ceil(totalItems / limit));
 
     return {
-      content: produtos.map((produto) => this.toResponse(produto)),
+      content: produtos.map(toProdutoResponse),
       pagination: {
         page,
         limit,
@@ -153,7 +156,7 @@ export class ProdutosService {
       throw new NotFoundException('Produto não encontrado.');
     }
 
-    return this.toResponse(produto);
+    return toProdutoResponse(produto);
   }
 
   async findByIdAdmin(id: number) {
@@ -180,7 +183,7 @@ export class ProdutosService {
       throw new NotFoundException('Produto não encontrado.');
     }
 
-    return this.toResponse(produto);
+    return toProdutoResponse(produto);
   }
 
   async create(dto: CreateProdutoDto) {
@@ -193,6 +196,8 @@ export class ProdutosService {
 
       await this.ensureCategoriaIsActive(dto.categoryId);
 
+      const shippingData = buildProdutoShippingData(dto);
+
       const produto = await this.prisma.produto.create({
         data: {
           name,
@@ -201,6 +206,7 @@ export class ProdutosService {
           stockQuantity: dto.stockQuantity,
           imageUrl: dto.imageUrl?.trim() || null,
           imagePublicId,
+          ...shippingData,
           active: dto.active ?? true,
           categoryId: dto.categoryId,
         },
@@ -219,9 +225,9 @@ export class ProdutosService {
         },
       });
 
-      return this.toResponse(produto);
+      return toProdutoResponse(produto);
     } catch (error) {
-      await this.cleanupOrphanImage(imagePublicId);
+      await this.produtoImageService.cleanupOrphanImage(imagePublicId);
 
       throw error;
     }
@@ -239,6 +245,8 @@ export class ProdutosService {
 
       await this.ensureCategoriaIsActive(dto.categoryId);
 
+      const shippingData = buildProdutoShippingData(dto);
+
       const produto = await this.prisma.produto.update({
         where: {
           id,
@@ -250,6 +258,7 @@ export class ProdutosService {
           stockQuantity: dto.stockQuantity,
           imageUrl: dto.imageUrl?.trim() || null,
           imagePublicId: novoImagePublicId,
+          ...shippingData,
           active: dto.active,
           categoryId: dto.categoryId,
         },
@@ -268,14 +277,14 @@ export class ProdutosService {
         },
       });
 
-      await this.cleanupReplacedImage(
+      await this.produtoImageService.cleanupReplacedImage(
         produtoAtual.imagePublicId,
         novoImagePublicId,
       );
 
-      return this.toResponse(produto);
+      return toProdutoResponse(produto);
     } catch (error) {
-      await this.cleanupOrphanImage(novoImagePublicId);
+      await this.produtoImageService.cleanupOrphanImage(novoImagePublicId);
 
       throw error;
     }
@@ -323,6 +332,8 @@ export class ProdutosService {
         data.imagePublicId = novoImagePublicId;
       }
 
+      Object.assign(data, buildProdutoShippingPatch(dto));
+
       if (dto.active !== undefined) {
         data.active = dto.active;
       }
@@ -357,14 +368,14 @@ export class ProdutosService {
         },
       });
 
-      await this.cleanupReplacedImage(
+      await this.produtoImageService.cleanupReplacedImage(
         produtoAtual.imagePublicId,
         novoImagePublicId,
       );
 
-      return this.toResponse(produto);
+      return toProdutoResponse(produto);
     } catch (error) {
-      await this.cleanupOrphanImage(candidateImagePublicId);
+      await this.produtoImageService.cleanupOrphanImage(candidateImagePublicId);
 
       throw error;
     }
@@ -403,7 +414,7 @@ export class ProdutosService {
         },
       });
 
-      await this.cleanupImage(produto.imagePublicId);
+      await this.produtoImageService.cleanupImage(produto.imagePublicId);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -416,29 +427,6 @@ export class ProdutosService {
 
       throw error;
     }
-  }
-
-  private buildOrderBy(sort?: string): Prisma.ProdutoOrderByWithRelationInput {
-    if (!sort) {
-      return {
-        id: 'asc',
-      };
-    }
-
-    const [field, direction] = sort.split(',');
-
-    if (
-      (field === 'price' || field === 'name' || field === 'id') &&
-      (direction === 'asc' || direction === 'desc')
-    ) {
-      return {
-        [field]: direction,
-      };
-    }
-
-    return {
-      id: 'asc',
-    };
   }
 
   private async ensureProdutoExists(id: number) {
@@ -511,105 +499,5 @@ export class ProdutosService {
         active: false,
       },
     });
-  }
-
-  private async cleanupOrphanImage(publicId: string | null): Promise<void> {
-    if (!publicId) {
-      return;
-    }
-
-    try {
-      const produtoVinculado = await this.prisma.produto.findFirst({
-        where: {
-          imagePublicId: publicId,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (produtoVinculado) {
-        return;
-      }
-    } catch (error) {
-      this.logger.warn(
-        `Não foi possível verificar se a imagem "${publicId}" está vinculada a algum produto.`,
-        error instanceof Error ? error.message : undefined,
-      );
-
-      return;
-    }
-
-    await this.cleanupImage(publicId);
-  }
-
-  private async cleanupReplacedImage(
-    oldPublicId: string | null,
-    newPublicId: string | null,
-  ): Promise<void> {
-    if (!oldPublicId || oldPublicId === newPublicId) {
-      return;
-    }
-
-    await this.cleanupImage(oldPublicId);
-  }
-
-  private async cleanupImage(publicId: string | null): Promise<void> {
-    if (!publicId) {
-      return;
-    }
-
-    try {
-      await this.cloudinaryService.deleteImage(publicId);
-    } catch (error) {
-      this.logger.warn(
-        `Não foi possível remover a imagem "${publicId}" da Cloudinary.`,
-        error instanceof Error ? error.message : undefined,
-      );
-    }
-  }
-
-  private toResponse(
-    produto: Prisma.ProdutoGetPayload<{
-      include: {
-        category: {
-          select: {
-            id: true;
-            name: true;
-          };
-        };
-        avaliacoes: {
-          select: {
-            rating: true;
-          };
-        };
-      };
-    }>,
-  ) {
-    const reviewsCount = produto.avaliacoes.length;
-
-    const averageRating =
-      reviewsCount > 0
-        ? produto.avaliacoes.reduce(
-            (sum, avaliacao) => sum + avaliacao.rating,
-            0,
-          ) / reviewsCount
-        : null;
-
-    return {
-      id: produto.id,
-      name: produto.name,
-      description: produto.description,
-      price: Number(produto.price),
-      stockQuantity: produto.stockQuantity,
-      imageUrl: produto.imageUrl,
-      imagePublicId: produto.imagePublicId,
-      active: produto.active,
-      category: produto.category,
-      averageRating,
-      reviewsCount,
-      createdAt: produto.createdAt,
-      updatedAt: produto.updatedAt,
-    };
   }
 }
