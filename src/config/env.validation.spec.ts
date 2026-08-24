@@ -15,6 +15,7 @@ describe('validateEnvironment', () => {
       CLOUDINARY_CLOUD_NAME: 'mel-api-cloud',
       CLOUDINARY_API_KEY: '123456789012345',
       CLOUDINARY_API_SECRET: 'cloudinary-api-secret-example',
+      SHIPPING_ORIGIN_ZIP_CODE: '62300000',
       ...overrides,
     };
   }
@@ -39,6 +40,8 @@ describe('validateEnvironment', () => {
     expect(result.CLOUDINARY_API_KEY).toBe('123456789012345');
 
     expect(result.CLOUDINARY_API_SECRET).toBe('cloudinary-api-secret-example');
+
+    expect(result.SHIPPING_ORIGIN_ZIP_CODE).toBe('62300000');
   });
 
   it('deve rejeitar configuração sem DATABASE_URL', () => {
@@ -122,5 +125,25 @@ describe('validateEnvironment', () => {
         }),
       ),
     ).toThrow('Configuração de ambiente inválida:');
+  });
+
+  it('deve rejeitar configuração sem SHIPPING_ORIGIN_ZIP_CODE', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidConfig({
+          SHIPPING_ORIGIN_ZIP_CODE: '',
+        }),
+      ),
+    ).toThrow('Configuração de ambiente inválida:');
+  });
+
+  it('deve rejeitar CEP de origem com formato inválido', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidConfig({
+          SHIPPING_ORIGIN_ZIP_CODE: '62300-000',
+        }),
+      ),
+    ).toThrow('SHIPPING_ORIGIN_ZIP_CODE deve conter exatamente 8 números.');
   });
 });

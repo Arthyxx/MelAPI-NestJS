@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
   MinLength,
@@ -53,6 +54,13 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   CLOUDINARY_API_SECRET!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^\d{8}$/, {
+    message: 'SHIPPING_ORIGIN_ZIP_CODE deve conter exatamente 8 números.',
+  })
+  SHIPPING_ORIGIN_ZIP_CODE!: string;
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {
