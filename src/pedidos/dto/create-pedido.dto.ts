@@ -4,8 +4,9 @@ import {
   IsArray,
   IsInt,
   IsNotEmpty,
-  ValidateNested,
+  IsString,
   Min,
+  ValidateNested,
 } from 'class-validator';
 
 export class CreatePedidoItemDto {
@@ -26,4 +27,10 @@ export class CreatePedidoDto {
   @ValidateNested({ each: true })
   @Type(() => CreatePedidoItemDto)
   items!: CreatePedidoItemDto[];
+
+  @IsString()
+  @IsNotEmpty({
+    message: 'Selecione uma opção de frete.',
+  })
+  shippingServiceId!: string;
 }

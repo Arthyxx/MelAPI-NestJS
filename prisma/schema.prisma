@@ -49,12 +49,13 @@ model Cliente {
 }
 
 model Categoria {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique @db.VarChar(100)
-  description String?  @db.Text
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id          Int     @id @default(autoincrement())
+  name        String  @unique @db.VarChar(100)
+  description String? @db.Text
+  active      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   produtos Produto[]
 
@@ -67,6 +68,7 @@ model Produto {
   description   String? @db.Text
   price         Decimal @db.Decimal(10, 2)
   stockQuantity Int
+
   imageUrl      String? @db.VarChar(500)
   imagePublicId String? @db.VarChar(500)
 
@@ -75,7 +77,8 @@ model Produto {
   widthCm  Decimal? @db.Decimal(8, 2)
   lengthCm Decimal? @db.Decimal(8, 2)
 
-  active    Boolean  @default(true)
+  active Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -89,11 +92,27 @@ model Produto {
 }
 
 model Pedido {
-  id         Int          @id @default(autoincrement())
-  status     StatusPedido @default(PENDENTE)
-  totalPrice Decimal      @db.Decimal(10, 2)
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  id     Int          @id @default(autoincrement())
+  status StatusPedido @default(PENDENTE)
+
+  totalPrice    Decimal @db.Decimal(10, 2)
+  shippingPrice Decimal @default(0) @db.Decimal(10, 2)
+
+  shippingServiceId    String? @db.VarChar(50)
+  shippingServiceName  String? @db.VarChar(100)
+  shippingCompanyName  String? @db.VarChar(100)
+  shippingDeliveryTime Int?
+
+  shippingZipCode       String? @db.VarChar(8)
+  shippingStreet        String? @db.VarChar(160)
+  shippingAddressNumber String? @db.VarChar(20)
+  shippingComplement    String? @db.VarChar(120)
+  shippingNeighborhood  String? @db.VarChar(100)
+  shippingCity          String? @db.VarChar(100)
+  shippingState         String? @db.VarChar(2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   clienteId Int
   cliente   Cliente @relation(fields: [clienteId], references: [id])
@@ -104,8 +123,9 @@ model Pedido {
 }
 
 model PedidoItem {
-  id        Int     @id @default(autoincrement())
-  quantity  Int
+  id       Int @id @default(autoincrement())
+  quantity Int
+
   unitPrice Decimal @db.Decimal(10, 2)
   subtotal  Decimal @db.Decimal(10, 2)
 
@@ -119,9 +139,10 @@ model PedidoItem {
 }
 
 model AvaliacaoProduto {
-  id        Int      @id @default(autoincrement())
-  rating    Int
-  comment   String?  @db.Text
+  id      Int     @id @default(autoincrement())
+  rating  Int
+  comment String? @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

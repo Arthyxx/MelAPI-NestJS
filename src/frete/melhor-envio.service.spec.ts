@@ -43,13 +43,20 @@ describe('MelhorEnvioService', () => {
     );
   });
 
-  it('deve enviar a cotação para o Melhor Envio', async () => {
+  it('deve enviar a cotação e normalizar as opções retornadas', async () => {
     const response = {
       data: [
         {
           id: 1,
           name: 'PAC',
-          price: '25.90',
+          price: '30.00',
+          custom_price: '25.90',
+          delivery_time: 8,
+          custom_delivery_time: 6,
+          company: {
+            name: 'Correios',
+            picture: 'https://example.com/correios.png',
+          },
         },
       ],
       status: 200,
@@ -77,7 +84,16 @@ describe('MelhorEnvioService', () => {
       ],
     });
 
-    expect(result).toEqual(response.data);
+    expect(result).toEqual([
+      {
+        serviceId: '1',
+        serviceName: 'PAC',
+        companyName: 'Correios',
+        companyPicture: 'https://example.com/correios.png',
+        price: 25.9,
+        deliveryTime: 6,
+      },
+    ]);
 
     expect(post).toHaveBeenCalledWith(
       'https://sandbox.melhorenvio.com.br/api/v2/me/shipment/calculate',
@@ -119,6 +135,95 @@ describe('MelhorEnvioService', () => {
         },
       },
     );
+  });
+
+  it('deve usar price e delivery_time quando não houver valores customizados', async () => {
+    const response = {
+      data: [
+        {
+          id: 2,
+          name: 'SEDEX',
+          price: '42.50',
+          delivery_time: 3,
+          company: {
+            name: 'Correios',
+          },
+        },
+      ],
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {},
+    } as AxiosResponse;
+
+    post.mockReturnValue(of(response));
+
+    const result = await service.calcularFrete({
+      originZipCode: '62300000',
+      destinationZipCode: '60000000',
+      items: [],
+    });
+
+    expect(result).toEqual([
+      {
+        serviceId: '2',
+        serviceName: 'SEDEX',
+        companyName: 'Correios',
+        companyPicture: undefined,
+        price: 42.5,
+        deliveryTime: 3,
+      },
+    ]);
+  });
+
+  it('deve ignorar opções com erro ou dados inválidos', async () => {
+    const response = {
+      data: [
+        {
+          id: 1,
+          name: 'PAC',
+          error: 'Serviço indisponível.',
+        },
+        {
+          id: 2,
+          name: 'SEDEX',
+          price: 'abc',
+          delivery_time: 3,
+        },
+        {
+          id: 3,
+          name: 'Transportadora',
+          price: '30.00',
+          delivery_time: 5,
+          company: {
+            name: 'Transportadora Teste',
+          },
+        },
+      ],
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {},
+    } as AxiosResponse;
+
+    post.mockReturnValue(of(response));
+
+    const result = await service.calcularFrete({
+      originZipCode: '62300000',
+      destinationZipCode: '60000000',
+      items: [],
+    });
+
+    expect(result).toEqual([
+      {
+        serviceId: '3',
+        serviceName: 'Transportadora',
+        companyName: 'Transportadora Teste',
+        companyPicture: undefined,
+        price: 30,
+        deliveryTime: 5,
+      },
+    ]);
   });
 
   it('deve rejeitar consulta quando o token não estiver configurado', async () => {

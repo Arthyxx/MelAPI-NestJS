@@ -5,10 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, StatusPedido } from '@prisma/client';
+
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePedidoDto } from './dto/create-pedido.dto';
 import { PedidoFilterDto } from './dto/pedido-filter.dto';
 import { UpdateStatusPedidoDto } from './dto/update-status-pedido.dto';
+import { PedidoShippingService } from './pedido-shipping.service';
 
 const ALLOWED_STATUS_TRANSITIONS: Record<StatusPedido, StatusPedido[]> = {
   [StatusPedido.PENDENTE]: [StatusPedido.PAGO, StatusPedido.CANCELADO],
@@ -22,7 +24,10 @@ const ALLOWED_STATUS_TRANSITIONS: Record<StatusPedido, StatusPedido[]> = {
 
 @Injectable()
 export class PedidosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pedidoShippingService: PedidoShippingService,
+  ) {}
 
   async findAll(filter: PedidoFilterDto) {
     const page = filter.page ?? 1;
@@ -87,6 +92,7 @@ export class PedidosService {
 
     return {
       content: pedidos.map((pedido) => this.toResponse(pedido)),
+
       pagination: {
         page,
         limit,
@@ -153,8 +159,16 @@ export class PedidosService {
       where: {
         id: clienteId,
       },
+
       select: {
         id: true,
+        zipCode: true,
+        street: true,
+        addressNumber: true,
+        complement: true,
+        neighborhood: true,
+        city: true,
+        state: true,
       },
     });
 
@@ -217,10 +231,19 @@ export class PedidosService {
       };
     });
 
-    const totalPrice = itemsData.reduce(
+    const shippingData = await this.pedidoShippingService.prepararFrete(
+      cliente,
+      dto,
+    );
+
+    const productsTotal = itemsData.reduce(
       (sum, item) => sum.add(item.subtotal),
       new Prisma.Decimal(0),
     );
+
+    const shippingPrice = new Prisma.Decimal(shippingData.shippingPrice);
+
+    const totalPrice = productsTotal.add(shippingPrice);
 
     const pedido = await this.prisma.$transaction(async (tx) => {
       for (const item of itemsData) {
@@ -249,17 +272,48 @@ export class PedidosService {
       return tx.pedido.create({
         data: {
           clienteId,
+
           status: StatusPedido.PENDENTE,
+
           totalPrice,
+
+          shippingPrice,
+
+          shippingServiceId: shippingData.shippingServiceId,
+
+          shippingServiceName: shippingData.shippingServiceName,
+
+          shippingCompanyName: shippingData.shippingCompanyName,
+
+          shippingDeliveryTime: shippingData.shippingDeliveryTime,
+
+          shippingZipCode: shippingData.shippingZipCode,
+
+          shippingStreet: shippingData.shippingStreet,
+
+          shippingAddressNumber: shippingData.shippingAddressNumber,
+
+          shippingComplement: shippingData.shippingComplement,
+
+          shippingNeighborhood: shippingData.shippingNeighborhood,
+
+          shippingCity: shippingData.shippingCity,
+
+          shippingState: shippingData.shippingState,
+
           items: {
             create: itemsData.map((item) => ({
               produtoId: item.produto.id,
+
               quantity: item.quantity,
+
               unitPrice: item.unitPrice,
+
               subtotal: item.subtotal,
             })),
           },
         },
+
         include: this.defaultInclude(),
       });
     });
@@ -304,6 +358,7 @@ export class PedidosService {
           id,
           status: pedidoAtual.status,
         },
+
         data: {
           status: dto.status,
         },
@@ -321,6 +376,7 @@ export class PedidosService {
             where: {
               id: item.produtoId,
             },
+
             data: {
               stockQuantity: {
                 increment: item.quantity,
@@ -334,6 +390,7 @@ export class PedidosService {
         where: {
           id,
         },
+
         include: this.defaultInclude(),
       });
 
@@ -354,6 +411,7 @@ export class PedidosService {
           email: true,
         },
       },
+
       items: {
         include: {
           produto: {
@@ -376,20 +434,61 @@ export class PedidosService {
     return {
       id: pedido.id,
       status: pedido.status,
+
       totalPrice: Number(pedido.totalPrice),
+
+      shippingPrice: Number(pedido.shippingPrice),
+
+      shipping: {
+        serviceId: pedido.shippingServiceId,
+
+        serviceName: pedido.shippingServiceName,
+
+        companyName: pedido.shippingCompanyName,
+
+        deliveryTime: pedido.shippingDeliveryTime,
+
+        address: {
+          zipCode: pedido.shippingZipCode,
+
+          street: pedido.shippingStreet,
+
+          addressNumber: pedido.shippingAddressNumber,
+
+          complement: pedido.shippingComplement,
+
+          neighborhood: pedido.shippingNeighborhood,
+
+          city: pedido.shippingCity,
+
+          state: pedido.shippingState,
+        },
+      },
+
       clienteId: pedido.clienteId,
+
       clienteName: pedido.cliente.name,
+
       clienteEmail: pedido.cliente.email,
+
       items: pedido.items.map((item) => ({
         id: item.id,
+
         produtoId: item.produtoId,
+
         produtoName: item.produto.name,
+
         imageUrl: item.produto.imageUrl,
+
         quantity: item.quantity,
+
         unitPrice: Number(item.unitPrice),
+
         subtotal: Number(item.subtotal),
       })),
+
       createdAt: pedido.createdAt,
+
       updatedAt: pedido.updatedAt,
     };
   }

@@ -2,10 +2,12 @@ import { BadRequestException } from '@nestjs/common';
 import { Prisma, StatusPedido } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { PedidoShippingService } from './pedido-shipping.service';
 import { PedidosService } from './pedidos.service';
 
 describe('PedidosService', () => {
   let service: PedidosService;
+
   let prisma: {
     cliente: {
       findUnique: jest.Mock;
@@ -19,21 +21,49 @@ describe('PedidosService', () => {
     $transaction: jest.Mock;
   };
 
+  const pedidoShippingService = {
+    prepararFrete: jest.fn(),
+  };
+
   beforeEach(() => {
+    jest.clearAllMocks();
+
     prisma = {
       cliente: {
         findUnique: jest.fn(),
       },
+
       produto: {
         findMany: jest.fn(),
       },
+
       pedido: {
         findUnique: jest.fn(),
       },
+
       $transaction: jest.fn(),
     };
 
-    service = new PedidosService(prisma as unknown as PrismaService);
+    pedidoShippingService.prepararFrete.mockResolvedValue({
+      shippingPrice: 25.9,
+      shippingServiceId: '1',
+      shippingServiceName: 'PAC',
+      shippingCompanyName: 'Correios',
+      shippingDeliveryTime: 6,
+
+      shippingZipCode: '62300000',
+      shippingStreet: 'Rua Principal',
+      shippingAddressNumber: '123',
+      shippingComplement: null,
+      shippingNeighborhood: 'Centro',
+      shippingCity: 'Viçosa do Ceará',
+      shippingState: 'CE',
+    });
+
+    service = new PedidosService(
+      prisma as unknown as PrismaService,
+      pedidoShippingService as unknown as PedidoShippingService,
+    );
   });
 
   it('should be defined', () => {
@@ -56,6 +86,7 @@ describe('PedidosService', () => {
           quantity: 2,
         },
       ],
+      shippingServiceId: '1',
     };
 
     await expect(service.create(1, dto)).rejects.toThrow(
@@ -65,6 +96,8 @@ describe('PedidosService', () => {
     );
 
     expect(prisma.produto.findMany).not.toHaveBeenCalled();
+
+    expect(pedidoShippingService.prepararFrete).not.toHaveBeenCalled();
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
@@ -91,6 +124,7 @@ describe('PedidosService', () => {
           quantity: 2,
         },
       ],
+      shippingServiceId: '1',
     };
 
     await expect(service.create(1, dto)).rejects.toThrow(
@@ -99,13 +133,24 @@ describe('PedidosService', () => {
       ),
     );
 
+    expect(pedidoShippingService.prepararFrete).not.toHaveBeenCalled();
+
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('deve impedir o pedido se o estoque mudar durante a transação', async () => {
-    prisma.cliente.findUnique.mockResolvedValue({
+    const cliente = {
       id: 1,
-    });
+      zipCode: '62300-000',
+      street: 'Rua Principal',
+      addressNumber: '123',
+      complement: null,
+      neighborhood: 'Centro',
+      city: 'Viçosa do Ceará',
+      state: 'CE',
+    };
+
+    prisma.cliente.findUnique.mockResolvedValue(cliente);
 
     prisma.produto.findMany.mockResolvedValue([
       {
@@ -123,6 +168,7 @@ describe('PedidosService', () => {
           count: 0,
         }),
       },
+
       pedido: {
         create: jest.fn(),
       },
@@ -140,12 +186,18 @@ describe('PedidosService', () => {
           quantity: 2,
         },
       ],
+      shippingServiceId: '1',
     };
 
     await expect(service.create(1, dto)).rejects.toThrow(
       new BadRequestException(
         'O estoque do produto "Mel Silvestre" foi alterado. Verifique a quantidade disponível e tente novamente.',
       ),
+    );
+
+    expect(pedidoShippingService.prepararFrete).toHaveBeenCalledWith(
+      cliente,
+      dto,
     );
 
     expect(tx.produto.updateMany).toHaveBeenCalledWith({
@@ -156,6 +208,7 @@ describe('PedidosService', () => {
           gte: 2,
         },
       },
+
       data: {
         stockQuantity: {
           decrement: 2,
@@ -208,8 +261,10 @@ describe('PedidosService', () => {
         updateMany: jest.fn().mockResolvedValue({
           count: 0,
         }),
+
         findUnique: jest.fn(),
       },
+
       produto: {
         update: jest.fn(),
       },
@@ -254,32 +309,58 @@ describe('PedidosService', () => {
     const pedidoAtualizado = {
       id: 1,
       status: StatusPedido.CANCELADO,
+
       totalPrice: new Prisma.Decimal('75.00'),
+
+      shippingPrice: new Prisma.Decimal('0.00'),
+
+      shippingServiceId: null,
+      shippingServiceName: null,
+      shippingCompanyName: null,
+      shippingDeliveryTime: null,
+
+      shippingZipCode: null,
+      shippingStreet: null,
+      shippingAddressNumber: null,
+      shippingComplement: null,
+      shippingNeighborhood: null,
+      shippingCity: null,
+      shippingState: null,
+
       clienteId: 1,
+
       cliente: {
         id: 1,
         name: 'Cliente Teste',
         email: 'cliente@teste.com',
       },
+
       items: [
         {
           id: 1,
           produtoId: 10,
           quantity: 2,
+
           unitPrice: new Prisma.Decimal('25.00'),
+
           subtotal: new Prisma.Decimal('50.00'),
+
           produto: {
             id: 10,
             name: 'Mel Silvestre',
             imageUrl: null,
           },
         },
+
         {
           id: 2,
           produtoId: 11,
           quantity: 1,
+
           unitPrice: new Prisma.Decimal('25.00'),
+
           subtotal: new Prisma.Decimal('25.00'),
+
           produto: {
             id: 11,
             name: 'Mel Florada',
@@ -287,7 +368,9 @@ describe('PedidosService', () => {
           },
         },
       ],
+
       createdAt: new Date('2026-08-11T12:00:00.000Z'),
+
       updatedAt: new Date('2026-08-11T13:00:00.000Z'),
     };
 
@@ -296,8 +379,10 @@ describe('PedidosService', () => {
         updateMany: jest.fn().mockResolvedValue({
           count: 1,
         }),
+
         findUnique: jest.fn().mockResolvedValue(pedidoAtualizado),
       },
+
       produto: {
         update: jest.fn().mockResolvedValue({}),
       },
@@ -319,6 +404,7 @@ describe('PedidosService', () => {
         id: 1,
         status: StatusPedido.PAGO,
       },
+
       data: {
         status: StatusPedido.CANCELADO,
       },
@@ -330,6 +416,7 @@ describe('PedidosService', () => {
       where: {
         id: 10,
       },
+
       data: {
         stockQuantity: {
           increment: 2,
@@ -341,6 +428,7 @@ describe('PedidosService', () => {
       where: {
         id: 11,
       },
+
       data: {
         stockQuantity: {
           increment: 1,
