@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   Max,
   Min,
@@ -61,6 +62,28 @@ class EnvironmentVariables {
     message: 'SHIPPING_ORIGIN_ZIP_CODE deve conter exatamente 8 números.',
   })
   SHIPPING_ORIGIN_ZIP_CODE!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @IsUrl(
+    {
+      protocols: ['http', 'https'],
+      require_protocol: true,
+    },
+    {
+      message: 'MELHOR_ENVIO_BASE_URL deve ser uma URL válida.',
+    },
+  )
+  MELHOR_ENVIO_BASE_URL!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  MELHOR_ENVIO_USER_AGENT!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  MELHOR_ENVIO_ACCESS_TOKEN?: string;
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {

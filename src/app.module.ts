@@ -10,6 +10,7 @@ import { ClientesModule } from './clientes/clientes.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { validateEnvironment } from './config/env.validation';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { FreteModule } from './frete/frete.module';
 import { PedidosModule } from './pedidos/pedidos.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProdutosModule } from './produtos/produtos.module';
@@ -37,6 +38,7 @@ import { ProdutosModule } from './produtos/produtos.module';
     PedidosModule,
     AvaliacoesModule,
     DashboardModule,
+    FreteModule,
   ],
 
   providers: [

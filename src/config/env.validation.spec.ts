@@ -16,6 +16,9 @@ describe('validateEnvironment', () => {
       CLOUDINARY_API_KEY: '123456789012345',
       CLOUDINARY_API_SECRET: 'cloudinary-api-secret-example',
       SHIPPING_ORIGIN_ZIP_CODE: '62300000',
+      MELHOR_ENVIO_BASE_URL: 'https://sandbox.melhorenvio.com.br',
+      MELHOR_ENVIO_USER_AGENT:
+        'Apiario Vitoria Seven (apiariovitoriaseven@gmail.com)',
       ...overrides,
     };
   }
@@ -42,6 +45,26 @@ describe('validateEnvironment', () => {
     expect(result.CLOUDINARY_API_SECRET).toBe('cloudinary-api-secret-example');
 
     expect(result.SHIPPING_ORIGIN_ZIP_CODE).toBe('62300000');
+
+    expect(result.MELHOR_ENVIO_BASE_URL).toBe(
+      'https://sandbox.melhorenvio.com.br',
+    );
+
+    expect(result.MELHOR_ENVIO_USER_AGENT).toBe(
+      'Apiario Vitoria Seven (apiariovitoriaseven@gmail.com)',
+    );
+
+    expect(result.MELHOR_ENVIO_ACCESS_TOKEN).toBeUndefined();
+  });
+
+  it('deve aceitar token do Melhor Envio quando configurado', () => {
+    const result = validateEnvironment(
+      createValidConfig({
+        MELHOR_ENVIO_ACCESS_TOKEN: 'sandbox-access-token',
+      }),
+    );
+
+    expect(result.MELHOR_ENVIO_ACCESS_TOKEN).toBe('sandbox-access-token');
   });
 
   it('deve rejeitar configuração sem DATABASE_URL', () => {
@@ -145,5 +168,45 @@ describe('validateEnvironment', () => {
         }),
       ),
     ).toThrow('SHIPPING_ORIGIN_ZIP_CODE deve conter exatamente 8 números.');
+  });
+
+  it('deve rejeitar configuração sem MELHOR_ENVIO_BASE_URL', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidConfig({
+          MELHOR_ENVIO_BASE_URL: '',
+        }),
+      ),
+    ).toThrow('Configuração de ambiente inválida:');
+  });
+
+  it('deve rejeitar MELHOR_ENVIO_BASE_URL inválida', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidConfig({
+          MELHOR_ENVIO_BASE_URL: 'sandbox-melhor-envio',
+        }),
+      ),
+    ).toThrow('MELHOR_ENVIO_BASE_URL deve ser uma URL válida.');
+  });
+
+  it('deve rejeitar configuração sem MELHOR_ENVIO_USER_AGENT', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidConfig({
+          MELHOR_ENVIO_USER_AGENT: '',
+        }),
+      ),
+    ).toThrow('Configuração de ambiente inválida:');
+  });
+
+  it('deve rejeitar MELHOR_ENVIO_ACCESS_TOKEN vazio quando informado', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidConfig({
+          MELHOR_ENVIO_ACCESS_TOKEN: '',
+        }),
+      ),
+    ).toThrow('Configuração de ambiente inválida:');
   });
 });

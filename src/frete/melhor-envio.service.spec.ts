@@ -1,0 +1,173 @@
+import { HttpService } from '@nestjs/axios';
+import { ServiceUnavailableException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { AxiosResponse } from 'axios';
+import { of, throwError } from 'rxjs';
+
+import { MelhorEnvioService } from './melhor-envio.service';
+
+describe('MelhorEnvioService', () => {
+  const post = jest.fn();
+
+  const httpService = {
+    post,
+  };
+
+  const configService = {
+    get: jest.fn(),
+    getOrThrow: jest.fn(),
+  };
+
+  let service: MelhorEnvioService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    configService.get.mockReturnValue('sandbox-access-token');
+
+    configService.getOrThrow.mockImplementation((key: string) => {
+      if (key === 'MELHOR_ENVIO_BASE_URL') {
+        return 'https://sandbox.melhorenvio.com.br';
+      }
+
+      if (key === 'MELHOR_ENVIO_USER_AGENT') {
+        return 'Apiario Vitoria Seven (apiariovitoriaseven@gmail.com)';
+      }
+
+      throw new Error(`Configuração não encontrada: ${key}`);
+    });
+
+    service = new MelhorEnvioService(
+      httpService as unknown as HttpService,
+      configService as unknown as ConfigService,
+    );
+  });
+
+  it('deve enviar a cotação para o Melhor Envio', async () => {
+    const response = {
+      data: [
+        {
+          id: 1,
+          name: 'PAC',
+          price: '25.90',
+        },
+      ],
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {},
+    } as AxiosResponse;
+
+    post.mockReturnValue(of(response));
+
+    const result = await service.calcularFrete({
+      originZipCode: '62300000',
+      destinationZipCode: '60000000',
+      items: [
+        {
+          productId: 1,
+          name: 'Mel 500g',
+          quantity: 2,
+          unitValue: 25.9,
+          weightKg: 0.78,
+          heightCm: 15,
+          widthCm: 12,
+          lengthCm: 12,
+        },
+      ],
+    });
+
+    expect(result).toEqual(response.data);
+
+    expect(post).toHaveBeenCalledWith(
+      'https://sandbox.melhorenvio.com.br/api/v2/me/shipment/calculate',
+      {
+        from: {
+          postal_code: '62300000',
+        },
+
+        to: {
+          postal_code: '60000000',
+        },
+
+        products: [
+          {
+            id: '1',
+            width: 12,
+            height: 15,
+            length: 12,
+            weight: 0.78,
+            insurance_value: 25.9,
+            quantity: 2,
+          },
+        ],
+
+        options: {
+          receipt: false,
+          own_hand: false,
+        },
+      },
+      {
+        headers: {
+          Authorization: 'Bearer sandbox-access-token',
+
+          'User-Agent': 'Apiario Vitoria Seven (apiariovitoriaseven@gmail.com)',
+
+          Accept: 'application/json',
+
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+  });
+
+  it('deve rejeitar consulta quando o token não estiver configurado', async () => {
+    configService.get.mockReturnValue(undefined);
+
+    await expect(
+      service.calcularFrete({
+        originZipCode: '62300000',
+        destinationZipCode: '60000000',
+        items: [],
+      }),
+    ).rejects.toThrow(
+      new ServiceUnavailableException(
+        'A integração com o Melhor Envio ainda não está configurada.',
+      ),
+    );
+
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('deve transformar erro do Melhor Envio em indisponibilidade do serviço', async () => {
+    post.mockReturnValue(
+      throwError(() => ({
+        isAxiosError: true,
+        response: {
+          status: 500,
+        },
+      })),
+    );
+
+    await expect(
+      service.calcularFrete({
+        originZipCode: '62300000',
+        destinationZipCode: '60000000',
+        items: [
+          {
+            productId: 1,
+            name: 'Mel 500g',
+            quantity: 1,
+            unitValue: 25.9,
+            weightKg: 0.78,
+            heightCm: 15,
+            widthCm: 12,
+            lengthCm: 12,
+          },
+        ],
+      }),
+    ).rejects.toThrow(
+      'Não foi possível consultar as opções de frete no momento.',
+    );
+  });
+});
