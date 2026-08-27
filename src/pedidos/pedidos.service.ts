@@ -45,6 +45,10 @@ export class PedidosService {
     if (search) {
       const numericSearch = /^\d+$/.test(search) ? Number(search) : null;
 
+      const zipCodeSearch = /^[\d-]+$/.test(search)
+        ? search.replace(/\D/g, '')
+        : null;
+
       where.OR = [
         {
           cliente: {
@@ -62,6 +66,75 @@ export class PedidosService {
             },
           },
         },
+        {
+          shippingCompanyName: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          shippingServiceName: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          shippingStreet: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          shippingAddressNumber: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          shippingComplement: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          shippingNeighborhood: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          shippingCity: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          shippingState: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          items: {
+            some: {
+              produto: {
+                name: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+        },
+        ...(zipCodeSearch
+          ? [
+              {
+                shippingZipCode: {
+                  contains: zipCodeSearch,
+                },
+              },
+            ]
+          : []),
         ...(numericSearch !== null
           ? [
               {
