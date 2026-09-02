@@ -30,20 +30,20 @@ model Cliente {
   role     Role    @default(CLIENTE)
   active   Boolean @default(true)
 
-  phone         String? @db.VarChar(20)
-  street        String? @db.VarChar(160)
+  phone        String? @db.VarChar(20)
+  street       String? @db.VarChar(160)
   addressNumber String? @db.VarChar(20)
-  complement    String? @db.VarChar(120)
-  neighborhood  String? @db.VarChar(100)
-  city          String? @db.VarChar(100)
-  state         String? @db.VarChar(2)
-  zipCode       String? @db.VarChar(9)
+  complement   String? @db.VarChar(120)
+  neighborhood String? @db.VarChar(100)
+  city         String? @db.VarChar(100)
+  state        String? @db.VarChar(2)
+  zipCode      String? @db.VarChar(9)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  pedidos    Pedido[]
-  avaliacoes AvaliacaoProduto[]
+  pedidos     Pedido[]
+  avaliacoes  AvaliacaoProduto[]
 
   @@map("clientes")
 }
@@ -68,7 +68,6 @@ model Produto {
   description   String? @db.Text
   price         Decimal @db.Decimal(10, 2)
   stockQuantity Int
-
   imageUrl      String? @db.VarChar(500)
   imagePublicId String? @db.VarChar(500)
 
@@ -117,7 +116,8 @@ model Pedido {
   clienteId Int
   cliente   Cliente @relation(fields: [clienteId], references: [id])
 
-  items PedidoItem[]
+  items      PedidoItem[]
+  pagamentos Pagamento[]
 
   @@map("pedidos")
 }
@@ -136,6 +136,29 @@ model PedidoItem {
   produto   Produto @relation(fields: [produtoId], references: [id])
 
   @@map("pedido_items")
+}
+
+model Pagamento {
+  id Int @id @default(autoincrement())
+
+  provider String @default("MERCADO_PAGO") @db.VarChar(30)
+
+  preferenceId String? @unique @db.VarChar(120)
+  paymentId    String? @unique @db.VarChar(120)
+
+  status       String  @default("pending") @db.VarChar(50)
+  statusDetail String? @db.VarChar(120)
+
+  approvedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pedidoId Int
+  pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([pedidoId])
+  @@map("pagamentos")
 }
 
 model AvaliacaoProduto {

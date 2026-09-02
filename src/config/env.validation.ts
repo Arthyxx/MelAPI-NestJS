@@ -84,6 +84,29 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   MELHOR_ENVIO_ACCESS_TOKEN?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @IsUrl(
+    {
+      protocols: ['http', 'https'],
+      require_protocol: true,
+    },
+    {
+      message: 'MERCADO_PAGO_BASE_URL deve ser uma URL válida.',
+    },
+  )
+  MERCADO_PAGO_BASE_URL!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  MERCADO_PAGO_ACCESS_TOKEN?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  MERCADO_PAGO_WEBHOOK_SECRET?: string;
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {
