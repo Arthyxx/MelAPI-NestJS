@@ -107,6 +107,11 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   MERCADO_PAGO_WEBHOOK_SECRET?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  GOOGLE_CLIENT_ID?: string;
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {
