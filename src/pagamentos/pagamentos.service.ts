@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, StatusPedido } from '@prisma/client';
 
+import { PedidosService } from '../pedidos/pedidos.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   MercadoPagoPreferenceInput,
@@ -19,6 +20,7 @@ export class PagamentosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mercadoPagoService: MercadoPagoService,
+    private readonly pedidosService: PedidosService,
   ) {}
 
   async iniciarPagamento(clienteId: number, pedidoId: number) {
@@ -56,6 +58,17 @@ export class PagamentosService {
     if (pedido.status !== StatusPedido.PENDENTE) {
       throw new BadRequestException(
         'Este pedido não está disponível para pagamento.',
+      );
+    }
+
+    if (
+      pedido.paymentExpiresAt &&
+      pedido.paymentExpiresAt.getTime() <= Date.now()
+    ) {
+      await this.pedidosService.expirarPedidoPendente(pedido.id);
+
+      throw new BadRequestException(
+        'O prazo para pagamento deste pedido expirou.',
       );
     }
 

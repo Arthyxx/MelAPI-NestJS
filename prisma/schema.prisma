@@ -113,8 +113,9 @@ model Pedido {
   shippingCity          String? @db.VarChar(100)
   shippingState         String? @db.VarChar(2)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  paymentExpiresAt DateTime?
 
   clienteId Int
   cliente   Cliente @relation(fields: [clienteId], references: [id])

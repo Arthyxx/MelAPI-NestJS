@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma, StatusPedido } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,6 +28,7 @@ export class PedidosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pedidoShippingService: PedidoShippingService,
+    private readonly configService: ConfigService,
   ) {}
 
   async findAll(filter: PedidoFilterDto) {
@@ -318,6 +320,11 @@ export class PedidosService {
 
     const totalPrice = productsTotal.add(shippingPrice);
 
+    const expirationMinutes =
+      this.configService.get<number>('PENDING_ORDER_EXPIRATION_MINUTES') ?? 30;
+
+    const paymentExpiresAt = new Date(Date.now() + expirationMinutes * 60_000);
+
     const pedido = await this.prisma.$transaction(async (tx) => {
       for (const item of itemsData) {
         const stockUpdate = await tx.produto.updateMany({
@@ -351,6 +358,8 @@ export class PedidosService {
           totalPrice,
 
           shippingPrice,
+
+          paymentExpiresAt,
 
           shippingServiceId: shippingData.shippingServiceId,
 
@@ -444,19 +453,7 @@ export class PedidosService {
       }
 
       if (dto.status === StatusPedido.CANCELADO) {
-        for (const item of pedidoAtual.items) {
-          await tx.produto.update({
-            where: {
-              id: item.produtoId,
-            },
-
-            data: {
-              stockQuantity: {
-                increment: item.quantity,
-              },
-            },
-          });
-        }
+        await this.restoreStock(tx, pedidoAtual.items);
       }
 
       const pedidoAtualizado = await tx.pedido.findUnique({
@@ -473,6 +470,79 @@ export class PedidosService {
 
       return this.toResponse(pedidoAtualizado);
     });
+  }
+
+  async expirarPedidoPendente(id: number): Promise<boolean> {
+    const pedido = await this.prisma.pedido.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        id: true,
+        status: true,
+        paymentExpiresAt: true,
+        items: {
+          select: {
+            produtoId: true,
+            quantity: true,
+          },
+        },
+      },
+    });
+
+    if (
+      !pedido ||
+      pedido.status !== StatusPedido.PENDENTE ||
+      !pedido.paymentExpiresAt ||
+      pedido.paymentExpiresAt.getTime() > Date.now()
+    ) {
+      return false;
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const statusUpdate = await tx.pedido.updateMany({
+        where: {
+          id: pedido.id,
+          status: StatusPedido.PENDENTE,
+          paymentExpiresAt: {
+            lte: new Date(),
+          },
+        },
+        data: {
+          status: StatusPedido.CANCELADO,
+        },
+      });
+
+      if (statusUpdate.count !== 1) {
+        return false;
+      }
+
+      await this.restoreStock(tx, pedido.items);
+
+      return true;
+    });
+  }
+
+  private async restoreStock(
+    tx: Prisma.TransactionClient,
+    items: Array<{
+      produtoId: number;
+      quantity: number;
+    }>,
+  ) {
+    for (const item of items) {
+      await tx.produto.update({
+        where: {
+          id: item.produtoId,
+        },
+
+        data: {
+          stockQuantity: {
+            increment: item.quantity,
+          },
+        },
+      });
+    }
   }
 
   private defaultInclude() {
@@ -511,6 +581,8 @@ export class PedidosService {
       totalPrice: Number(pedido.totalPrice),
 
       shippingPrice: Number(pedido.shippingPrice),
+
+      paymentExpiresAt: pedido.paymentExpiresAt,
 
       shipping: {
         serviceId: pedido.shippingServiceId,

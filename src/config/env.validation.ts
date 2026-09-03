@@ -112,6 +112,12 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   GOOGLE_CLIENT_ID?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(1440)
+  PENDING_ORDER_EXPIRATION_MINUTES: number = 30;
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {
