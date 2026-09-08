@@ -1,4 +1,9 @@
-import { ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 
 import { HttpExceptionFilter } from './http-exception.filter';
 
@@ -12,6 +17,7 @@ interface FilterResponseBody {
 
 describe('HttpExceptionFilter', () => {
   let filter: HttpExceptionFilter;
+  let loggerErrorSpy: jest.SpyInstance;
 
   const jsonMock = jest.fn((body: FilterResponseBody) => body);
 
@@ -24,7 +30,9 @@ describe('HttpExceptionFilter', () => {
   };
 
   const requestMock = {
-    url: '/api/teste',
+    method: 'GET',
+    url: '/api/teste?token=segredo',
+    path: '/api/teste',
   };
 
   const hostMock = {
@@ -37,7 +45,13 @@ describe('HttpExceptionFilter', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+
     filter = new HttpExceptionFilter();
+  });
+
+  afterEach(() => {
+    loggerErrorSpy.mockRestore();
   });
 
   it('deve normalizar erro 429', () => {
@@ -62,6 +76,7 @@ describe('HttpExceptionFilter', () => {
     const responseBody = jsonMock.mock.calls[0][0];
 
     expect(typeof responseBody.timestamp).toBe('string');
+    expect(loggerErrorSpy).not.toHaveBeenCalled();
   });
 
   it('deve preservar mensagem de uma HttpException conhecida', () => {
@@ -86,6 +101,8 @@ describe('HttpExceptionFilter', () => {
         path: '/api/teste',
       }),
     );
+
+    expect(loggerErrorSpy).not.toHaveBeenCalled();
   });
 
   it('deve tratar mensagens de validação em formato de array', () => {
@@ -107,6 +124,8 @@ describe('HttpExceptionFilter', () => {
         error: 'Bad Request',
       }),
     );
+
+    expect(loggerErrorSpy).not.toHaveBeenCalled();
   });
 
   it('não deve expor detalhes de erros internos inesperados', () => {
@@ -128,5 +147,56 @@ describe('HttpExceptionFilter', () => {
     const responseBody = jsonMock.mock.calls[0][0];
 
     expect(JSON.stringify(responseBody)).not.toContain('senha_do_banco');
+
+    expect(JSON.stringify(responseBody)).not.toContain('segredo');
+  });
+
+  it('deve registrar erro interno sem incluir mensagem sensível', () => {
+    const exception = new Error('senha_do_banco=segredo');
+
+    const safeStack = exception.stack?.split('\n').slice(1).join('\n');
+
+    filter.catch(exception, hostMock);
+
+    expect(loggerErrorSpy).toHaveBeenCalledTimes(1);
+
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      'Erro interno não tratado em GET /api/teste (Error).',
+      safeStack,
+    );
+
+    expect(safeStack).not.toContain('senha_do_banco');
+
+    expect(safeStack).not.toContain('segredo');
+
+    expect(safeStack).not.toContain('token=');
+  });
+
+  it('deve remover query string do path retornado ao cliente', () => {
+    const requestWithoutPath = {
+      method: 'GET',
+      url: '/api/teste?token=segredo',
+    };
+
+    const hostWithoutPath = {
+      switchToHttp: jest.fn(() => ({
+        getResponse: jest.fn(() => responseMock),
+        getRequest: jest.fn(() => requestWithoutPath),
+      })),
+    } as unknown as ArgumentsHost;
+
+    const exception = new Error('Falha interna');
+
+    filter.catch(exception, hostWithoutPath);
+
+    expect(jsonMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/api/teste',
+      }),
+    );
+
+    const responseBody = jsonMock.mock.calls[0][0];
+
+    expect(JSON.stringify(responseBody)).not.toContain('token=segredo');
   });
 });

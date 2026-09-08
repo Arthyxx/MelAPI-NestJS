@@ -4,6 +4,7 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
@@ -15,17 +16,24 @@ interface ErrorResponse {
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost) {
     const context = host.switchToHttp();
 
     const response = context.getResponse<Response>();
-
     const request = context.getRequest<Request>();
 
     const status =
       exception instanceof HttpException
         ? exception.getStatus()
         : Number(HttpStatus.INTERNAL_SERVER_ERROR);
+
+    const requestPath = this.getSafeRequestPath(request);
+
+    if (status >= Number(HttpStatus.INTERNAL_SERVER_ERROR)) {
+      this.logInternalError(exception, request, requestPath);
+    }
 
     const exceptionResponse =
       exception instanceof HttpException ? exception.getResponse() : null;
@@ -37,8 +45,52 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message: normalizedError.message,
       error: normalizedError.error,
       timestamp: new Date().toISOString(),
-      path: request.url,
+      path: requestPath,
     });
+  }
+
+  private logInternalError(
+    exception: unknown,
+    request: Request,
+    requestPath: string,
+  ) {
+    const method = request.method || 'UNKNOWN';
+    const requestContext = `${method} ${requestPath}`;
+
+    if (exception instanceof Error) {
+      const safeStack = this.getSafeStack(exception);
+
+      this.logger.error(
+        `Erro interno não tratado em ${requestContext} (${exception.name}).`,
+        safeStack,
+      );
+
+      return;
+    }
+
+    this.logger.error(`Erro interno não tratado em ${requestContext}.`);
+  }
+
+  private getSafeStack(exception: Error) {
+    if (!exception.stack) {
+      return undefined;
+    }
+
+    const stackLines = exception.stack.split('\n');
+
+    if (stackLines.length <= 1) {
+      return undefined;
+    }
+
+    return stackLines.slice(1).join('\n');
+  }
+
+  private getSafeRequestPath(request: Request) {
+    if (request.path) {
+      return request.path;
+    }
+
+    return request.url.split('?')[0];
   }
 
   private normalizeError(
