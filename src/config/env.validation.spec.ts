@@ -29,6 +29,21 @@ describe('validateEnvironment', () => {
     };
   }
 
+  function createValidProductionConfig(
+    overrides: Record<string, unknown> = {},
+  ) {
+    return createValidConfig({
+      NODE_ENV: 'production',
+      FRONTEND_URL: 'https://mel-frontend.vercel.app',
+      MELHOR_ENVIO_ACCESS_TOKEN: 'melhor-envio-token-producao',
+      MERCADO_PAGO_ACCESS_TOKEN: 'mercado-pago-token-producao',
+      MERCADO_PAGO_WEBHOOK_SECRET: 'mercado-pago-webhook-secret',
+      GOOGLE_CLIENT_ID: 'google-client-id.apps.googleusercontent.com',
+
+      ...overrides,
+    });
+  }
+
   it('deve aceitar uma configuração válida de desenvolvimento', () => {
     const result = validateEnvironment(createValidConfig());
 
@@ -39,13 +54,10 @@ describe('validateEnvironment', () => {
     );
 
     expect(result.JWT_SECRET).toBe(jwtSecret);
-
     expect(result.JWT_EXPIRES_IN).toBe('1h');
-
     expect(result.PORT).toBe(3000);
 
     expect(result.CLOUDINARY_CLOUD_NAME).toBe('mel-api-cloud');
-
     expect(result.CLOUDINARY_API_KEY).toBe('123456789012345');
 
     expect(result.CLOUDINARY_API_SECRET).toBe('cloudinary-api-secret-example');
@@ -105,27 +117,110 @@ describe('validateEnvironment', () => {
     ).toThrow('Configuração de ambiente inválida:');
   });
 
-  it('deve exigir FRONTEND_URL em produção', () => {
+  it('deve aceitar uma configuração válida de produção', () => {
+    const result = validateEnvironment(createValidProductionConfig());
+
+    expect(result.NODE_ENV).toBe('production');
+
+    expect(result.FRONTEND_URL).toBe('https://mel-frontend.vercel.app');
+
+    expect(result.MELHOR_ENVIO_ACCESS_TOKEN).toBe(
+      'melhor-envio-token-producao',
+    );
+
+    expect(result.MERCADO_PAGO_ACCESS_TOKEN).toBe(
+      'mercado-pago-token-producao',
+    );
+
+    expect(result.MERCADO_PAGO_WEBHOOK_SECRET).toBe(
+      'mercado-pago-webhook-secret',
+    );
+
+    expect(result.GOOGLE_CLIENT_ID).toBe(
+      'google-client-id.apps.googleusercontent.com',
+    );
+  });
+
+  it('deve exigir todas as variáveis críticas em produção', () => {
     expect(() =>
       validateEnvironment(
         createValidConfig({
           NODE_ENV: 'production',
         }),
       ),
-    ).toThrow('FRONTEND_URL é obrigatória em produção.');
+    ).toThrow(
+      'variáveis obrigatórias em produção ausentes: FRONTEND_URL, MELHOR_ENVIO_ACCESS_TOKEN, MERCADO_PAGO_ACCESS_TOKEN, MERCADO_PAGO_WEBHOOK_SECRET, GOOGLE_CLIENT_ID.',
+    );
   });
 
-  it('deve aceitar produção quando FRONTEND_URL estiver configurada', () => {
-    const result = validateEnvironment(
-      createValidConfig({
-        NODE_ENV: 'production',
-        FRONTEND_URL: 'https://mel-frontend.vercel.app',
-      }),
-    );
+  it('deve rejeitar produção sem token do Melhor Envio', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidProductionConfig({
+          MELHOR_ENVIO_ACCESS_TOKEN: undefined,
+        }),
+      ),
+    ).toThrow('MELHOR_ENVIO_ACCESS_TOKEN');
+  });
 
-    expect(result.NODE_ENV).toBe('production');
+  it('deve rejeitar produção sem token do Mercado Pago', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidProductionConfig({
+          MERCADO_PAGO_ACCESS_TOKEN: undefined,
+        }),
+      ),
+    ).toThrow('MERCADO_PAGO_ACCESS_TOKEN');
+  });
 
-    expect(result.FRONTEND_URL).toBe('https://mel-frontend.vercel.app');
+  it('deve rejeitar produção sem segredo do webhook do Mercado Pago', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidProductionConfig({
+          MERCADO_PAGO_WEBHOOK_SECRET: undefined,
+        }),
+      ),
+    ).toThrow('MERCADO_PAGO_WEBHOOK_SECRET');
+  });
+
+  it('deve rejeitar produção sem GOOGLE_CLIENT_ID', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidProductionConfig({
+          GOOGLE_CLIENT_ID: undefined,
+        }),
+      ),
+    ).toThrow('GOOGLE_CLIENT_ID');
+  });
+
+  it('deve rejeitar FRONTEND_URL sem HTTPS em produção', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidProductionConfig({
+          FRONTEND_URL: 'http://mel-frontend.exemplo.com',
+        }),
+      ),
+    ).toThrow('FRONTEND_URL deve utilizar HTTPS em produção.');
+  });
+
+  it('deve rejeitar MERCADO_PAGO_BASE_URL sem HTTPS em produção', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidProductionConfig({
+          MERCADO_PAGO_BASE_URL: 'http://api.mercadopago.com',
+        }),
+      ),
+    ).toThrow('MERCADO_PAGO_BASE_URL deve utilizar HTTPS em produção.');
+  });
+
+  it('deve rejeitar MELHOR_ENVIO_BASE_URL sem HTTPS em produção', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidProductionConfig({
+          MELHOR_ENVIO_BASE_URL: 'http://melhorenvio.com.br',
+        }),
+      ),
+    ).toThrow('MELHOR_ENVIO_BASE_URL deve utilizar HTTPS em produção.');
   });
 
   it('deve rejeitar configuração sem CLOUDINARY_CLOUD_NAME', () => {

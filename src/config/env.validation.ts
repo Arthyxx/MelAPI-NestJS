@@ -137,14 +137,97 @@ export function validateEnvironment(config: Record<string, unknown>) {
     throw new Error(`Configuração de ambiente inválida: ${messages}`);
   }
 
-  if (
-    validatedConfig.NODE_ENV === 'production' &&
-    !validatedConfig.FRONTEND_URL
-  ) {
-    throw new Error(
-      'Configuração de ambiente inválida: FRONTEND_URL é obrigatória em produção.',
-    );
+  if (validatedConfig.NODE_ENV === 'production') {
+    validateProductionEnvironment(validatedConfig);
   }
 
   return validatedConfig;
+}
+
+function validateProductionEnvironment(config: EnvironmentVariables) {
+  const requiredProductionVariables: Array<{
+    name: string;
+    value: string | undefined;
+  }> = [
+    {
+      name: 'FRONTEND_URL',
+      value: config.FRONTEND_URL,
+    },
+    {
+      name: 'MELHOR_ENVIO_ACCESS_TOKEN',
+      value: config.MELHOR_ENVIO_ACCESS_TOKEN,
+    },
+    {
+      name: 'MERCADO_PAGO_ACCESS_TOKEN',
+      value: config.MERCADO_PAGO_ACCESS_TOKEN,
+    },
+    {
+      name: 'MERCADO_PAGO_WEBHOOK_SECRET',
+      value: config.MERCADO_PAGO_WEBHOOK_SECRET,
+    },
+    {
+      name: 'GOOGLE_CLIENT_ID',
+      value: config.GOOGLE_CLIENT_ID,
+    },
+  ];
+
+  const missingVariables = requiredProductionVariables
+    .filter(({ value }) => !value?.trim())
+    .map(({ name }) => name);
+
+  if (missingVariables.length > 0) {
+    throw new Error(
+      `Configuração de ambiente inválida: variáveis obrigatórias em produção ausentes: ${missingVariables.join(
+        ', ',
+      )}.`,
+    );
+  }
+
+  if (!config.FRONTEND_URL) {
+    return;
+  }
+
+  let frontendUrl: URL;
+
+  try {
+    frontendUrl = new URL(config.FRONTEND_URL);
+  } catch {
+    throw new Error(
+      'Configuração de ambiente inválida: FRONTEND_URL deve ser uma URL válida em produção.',
+    );
+  }
+
+  if (frontendUrl.protocol !== 'https:') {
+    throw new Error(
+      'Configuração de ambiente inválida: FRONTEND_URL deve utilizar HTTPS em produção.',
+    );
+  }
+
+  validateHttpsIntegrationUrl(
+    config.MERCADO_PAGO_BASE_URL,
+    'MERCADO_PAGO_BASE_URL',
+  );
+
+  validateHttpsIntegrationUrl(
+    config.MELHOR_ENVIO_BASE_URL,
+    'MELHOR_ENVIO_BASE_URL',
+  );
+}
+
+function validateHttpsIntegrationUrl(value: string, variableName: string) {
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(
+      `Configuração de ambiente inválida: ${variableName} deve ser uma URL válida.`,
+    );
+  }
+
+  if (url.protocol !== 'https:') {
+    throw new Error(
+      `Configuração de ambiente inválida: ${variableName} deve utilizar HTTPS em produção.`,
+    );
+  }
 }
