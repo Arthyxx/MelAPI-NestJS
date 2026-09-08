@@ -14,14 +14,21 @@ import { UpdateStatusPedidoDto } from './dto/update-status-pedido.dto';
 import { PedidoShippingService } from './pedido-shipping.service';
 
 const ALLOWED_STATUS_TRANSITIONS: Record<StatusPedido, StatusPedido[]> = {
-  [StatusPedido.PENDENTE]: [StatusPedido.PAGO, StatusPedido.CANCELADO],
-  [StatusPedido.PAGO]: [StatusPedido.CONFIRMADO, StatusPedido.CANCELADO],
-  [StatusPedido.CONFIRMADO]: [StatusPedido.PREPARANDO, StatusPedido.CANCELADO],
-  [StatusPedido.PREPARANDO]: [StatusPedido.ENVIADO, StatusPedido.CANCELADO],
+  [StatusPedido.PENDENTE]: [StatusPedido.CANCELADO],
+  [StatusPedido.PAGO]: [StatusPedido.CONFIRMADO],
+  [StatusPedido.CONFIRMADO]: [StatusPedido.PREPARANDO],
+  [StatusPedido.PREPARANDO]: [StatusPedido.ENVIADO],
+  [StatusPedido.CANCELAMENTO_PENDENTE]: [],
   [StatusPedido.ENVIADO]: [StatusPedido.ENTREGUE],
   [StatusPedido.ENTREGUE]: [],
   [StatusPedido.CANCELADO]: [],
 };
+
+const REFUNDABLE_ORDER_STATUSES: StatusPedido[] = [
+  StatusPedido.PAGO,
+  StatusPedido.CONFIRMADO,
+  StatusPedido.PREPARANDO,
+];
 
 @Injectable()
 export class PedidosService {
@@ -470,6 +477,100 @@ export class PedidosService {
 
       return this.toResponse(pedidoAtualizado);
     });
+  }
+
+  async iniciarCancelamentoComReembolso(id: number) {
+    const pedido = await this.prisma.pedido.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!pedido) {
+      throw new NotFoundException('Pedido não encontrado.');
+    }
+
+    if (pedido.status === StatusPedido.CANCELAMENTO_PENDENTE) {
+      return;
+    }
+
+    if (!REFUNDABLE_ORDER_STATUSES.includes(pedido.status)) {
+      throw new BadRequestException(
+        'Este pedido não pode ser cancelado com reembolso.',
+      );
+    }
+
+    const statusUpdate = await this.prisma.pedido.updateMany({
+      where: {
+        id: pedido.id,
+        status: pedido.status,
+      },
+      data: {
+        status: StatusPedido.CANCELAMENTO_PENDENTE,
+      },
+    });
+
+    if (statusUpdate.count !== 1) {
+      throw new BadRequestException(
+        'O status deste pedido foi alterado por outra operação. Atualize a página e tente novamente.',
+      );
+    }
+  }
+
+  async finalizarCancelamentoReembolsado(id: number) {
+    const pedido = await this.prisma.pedido.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        id: true,
+        status: true,
+        items: {
+          select: {
+            produtoId: true,
+            quantity: true,
+          },
+        },
+      },
+    });
+
+    if (!pedido) {
+      throw new NotFoundException('Pedido não encontrado.');
+    }
+
+    if (pedido.status === StatusPedido.CANCELADO) {
+      return this.findById(id);
+    }
+
+    if (pedido.status !== StatusPedido.CANCELAMENTO_PENDENTE) {
+      throw new BadRequestException(
+        'Este pedido não está aguardando finalização de reembolso.',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const statusUpdate = await tx.pedido.updateMany({
+        where: {
+          id: pedido.id,
+          status: StatusPedido.CANCELAMENTO_PENDENTE,
+        },
+        data: {
+          status: StatusPedido.CANCELADO,
+        },
+      });
+
+      if (statusUpdate.count !== 1) {
+        return;
+      }
+
+      await this.restoreStock(tx, pedido.items);
+    });
+
+    return this.findById(id);
   }
 
   async expirarPedidoPendente(id: number): Promise<boolean> {

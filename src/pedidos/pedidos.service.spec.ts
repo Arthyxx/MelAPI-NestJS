@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma, StatusPedido } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -19,12 +20,17 @@ describe('PedidosService', () => {
       findUnique: jest.Mock;
       findMany: jest.Mock;
       count: jest.Mock;
+      updateMany: jest.Mock;
     };
     $transaction: jest.Mock;
   };
 
   const pedidoShippingService = {
     prepararFrete: jest.fn(),
+  };
+
+  const configService = {
+    get: jest.fn(),
   };
 
   const getFindManyArgs = (): Prisma.PedidoFindManyArgs => {
@@ -71,6 +77,7 @@ describe('PedidosService', () => {
         findUnique: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn(),
+        updateMany: jest.fn(),
       },
 
       $transaction: jest.fn(),
@@ -92,9 +99,18 @@ describe('PedidosService', () => {
       shippingState: 'CE',
     });
 
+    configService.get.mockImplementation((key: string) => {
+      if (key === 'PENDING_ORDER_EXPIRATION_MINUTES') {
+        return 30;
+      }
+
+      return undefined;
+    });
+
     service = new PedidosService(
       prisma as unknown as PrismaService,
       pedidoShippingService as unknown as PedidoShippingService,
+      configService as unknown as ConfigService,
     );
   });
 
@@ -379,6 +395,10 @@ describe('PedidosService', () => {
       ),
     );
 
+    expect(configService.get).toHaveBeenCalledWith(
+      'PENDING_ORDER_EXPIRATION_MINUTES',
+    );
+
     expect(pedidoShippingService.prepararFrete).toHaveBeenCalledWith(
       cliente,
       dto,
@@ -428,6 +448,31 @@ describe('PedidosService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it('deve impedir cancelamento direto de pedido pago', async () => {
+    prisma.pedido.findUnique.mockResolvedValue({
+      id: 1,
+      status: StatusPedido.PAGO,
+      items: [
+        {
+          produtoId: 10,
+          quantity: 1,
+        },
+      ],
+    });
+
+    await expect(
+      service.updateStatus(1, {
+        status: StatusPedido.CANCELADO,
+      }),
+    ).rejects.toThrow(
+      new BadRequestException(
+        'Não é permitido alterar o pedido de PAGO para CANCELADO.',
+      ),
+    );
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('deve impedir atualização quando o status mudar por outra operação', async () => {
     prisma.pedido.findUnique.mockResolvedValue({
       id: 1,
@@ -461,7 +506,7 @@ describe('PedidosService', () => {
 
     await expect(
       service.updateStatus(1, {
-        status: StatusPedido.CANCELADO,
+        status: StatusPedido.CONFIRMADO,
       }),
     ).rejects.toThrow(
       new BadRequestException(
@@ -469,15 +514,68 @@ describe('PedidosService', () => {
       ),
     );
 
+    expect(tx.pedido.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 1,
+        status: StatusPedido.PAGO,
+      },
+
+      data: {
+        status: StatusPedido.CONFIRMADO,
+      },
+    });
+
     expect(tx.produto.update).not.toHaveBeenCalled();
 
     expect(tx.pedido.findUnique).not.toHaveBeenCalled();
   });
 
-  it('deve devolver o estoque exatamente uma vez ao cancelar o pedido', async () => {
+  it('deve reservar pedido pago para cancelamento com reembolso', async () => {
     prisma.pedido.findUnique.mockResolvedValue({
       id: 1,
       status: StatusPedido.PAGO,
+    });
+
+    prisma.pedido.updateMany.mockResolvedValue({
+      count: 1,
+    });
+
+    await service.iniciarCancelamentoComReembolso(1);
+
+    expect(prisma.pedido.updateMany).toHaveBeenCalledTimes(1);
+
+    expect(prisma.pedido.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 1,
+        status: StatusPedido.PAGO,
+      },
+
+      data: {
+        status: StatusPedido.CANCELAMENTO_PENDENTE,
+      },
+    });
+  });
+
+  it('deve rejeitar reembolso de pedido já enviado', async () => {
+    prisma.pedido.findUnique.mockResolvedValue({
+      id: 1,
+      status: StatusPedido.ENVIADO,
+    });
+
+    await expect(service.iniciarCancelamentoComReembolso(1)).rejects.toThrow(
+      new BadRequestException(
+        'Este pedido não pode ser cancelado com reembolso.',
+      ),
+    );
+
+    expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('deve devolver o estoque exatamente uma vez após o reembolso', async () => {
+    const pedidoAguardandoReembolso = {
+      id: 1,
+      status: StatusPedido.CANCELAMENTO_PENDENTE,
+
       items: [
         {
           produtoId: 10,
@@ -488,7 +586,7 @@ describe('PedidosService', () => {
           quantity: 1,
         },
       ],
-    });
+    };
 
     const pedidoAtualizado = {
       id: 1,
@@ -497,6 +595,8 @@ describe('PedidosService', () => {
       totalPrice: new Prisma.Decimal('75.00'),
 
       shippingPrice: new Prisma.Decimal('0.00'),
+
+      paymentExpiresAt: null,
 
       shippingServiceId: null,
       shippingServiceName: null,
@@ -558,13 +658,15 @@ describe('PedidosService', () => {
       updatedAt: new Date('2026-08-11T13:00:00.000Z'),
     };
 
+    prisma.pedido.findUnique
+      .mockResolvedValueOnce(pedidoAguardandoReembolso)
+      .mockResolvedValueOnce(pedidoAtualizado);
+
     const tx = {
       pedido: {
         updateMany: jest.fn().mockResolvedValue({
           count: 1,
         }),
-
-        findUnique: jest.fn().mockResolvedValue(pedidoAtualizado),
       },
 
       produto: {
@@ -577,16 +679,14 @@ describe('PedidosService', () => {
         Promise.resolve(callback(tx)),
     );
 
-    const result = await service.updateStatus(1, {
-      status: StatusPedido.CANCELADO,
-    });
+    const result = await service.finalizarCancelamentoReembolsado(1);
 
     expect(tx.pedido.updateMany).toHaveBeenCalledTimes(1);
 
     expect(tx.pedido.updateMany).toHaveBeenCalledWith({
       where: {
         id: 1,
-        status: StatusPedido.PAGO,
+        status: StatusPedido.CANCELAMENTO_PENDENTE,
       },
 
       data: {

@@ -1,36 +1,59 @@
 import 'dotenv/config';
+
 import { PrismaClient, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+function getRequiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(
+      `${name} é obrigatório para executar o seed administrativo.`,
+    );
+  }
+
+  return value;
+}
+
 async function main() {
-  const adminName = process.env.ADMIN_NAME || 'Administrador';
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@email.com';
-  const adminPassword = process.env.ADMIN_PASSWORD || '123456';
+  const adminName = process.env.ADMIN_NAME?.trim() || 'Administrador';
 
-  const normalizedEmail = adminEmail.trim().toLowerCase();
+  const adminEmail = getRequiredEnv('ADMIN_EMAIL').toLowerCase();
 
-  const existingAdmin = await prisma.cliente.findUnique({
+  const adminPassword = getRequiredEnv('ADMIN_PASSWORD');
+
+  if (adminPassword.length < 12) {
+    throw new Error('ADMIN_PASSWORD deve possuir pelo menos 12 caracteres.');
+  }
+
+  const existingCliente = await prisma.cliente.findUnique({
     where: {
-      email: normalizedEmail,
+      email: adminEmail,
+    },
+
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      active: true,
     },
   });
 
-  if (existingAdmin) {
-    console.log(`Admin já existe: ${normalizedEmail}`);
+  if (existingCliente) {
+    if (existingCliente.role !== Role.ADMIN) {
+      throw new Error(
+        `Já existe um cliente com o e-mail ${adminEmail}. O seed não promoverá automaticamente esse usuário para ADMIN.`,
+      );
+    }
 
-    if (existingAdmin.role !== Role.ADMIN) {
-      await prisma.cliente.update({
-        where: {
-          id: existingAdmin.id,
-        },
-        data: {
-          role: Role.ADMIN,
-        },
-      });
+    console.log(`Administrador já existe: ${adminEmail}`);
 
-      console.log(`Usuário ${normalizedEmail} atualizado para ADMIN.`);
+    if (!existingCliente.active) {
+      console.warn(
+        `O administrador ${adminEmail} está desativado. O seed não alterará seu status automaticamente.`,
+      );
     }
 
     return;
@@ -40,20 +63,26 @@ async function main() {
 
   await prisma.cliente.create({
     data: {
-      name: adminName.trim(),
-      email: normalizedEmail,
+      name: adminName,
+      email: adminEmail,
       password: hashedPassword,
       role: Role.ADMIN,
+      active: true,
     },
   });
 
-  console.log(`Admin criado com sucesso: ${normalizedEmail}`);
+  console.log(`Administrador criado com sucesso: ${adminEmail}`);
 }
 
-main()
-  .catch((error) => {
-    console.error('Erro ao executar seed:', error);
-    process.exit(1);
+void main()
+  .catch((error: unknown) => {
+    if (error instanceof Error) {
+      console.error('Erro ao executar seed:', error.message);
+    } else {
+      console.error('Erro desconhecido ao executar seed.');
+    }
+
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();

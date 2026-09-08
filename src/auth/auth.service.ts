@@ -77,6 +77,7 @@ export class AuthService {
           where: {
             id: clienteByEmail.id,
           },
+
           data: {
             googleSub: googleIdentity.sub,
           },
@@ -108,15 +109,18 @@ export class AuthService {
     email: string;
     role: Role;
     active: boolean;
+    tokenVersion: number;
   }) {
     const token = await this.jwtService.signAsync({
       sub: cliente.id,
       email: cliente.email,
       role: cliente.role,
+      tokenVersion: cliente.tokenVersion,
     });
 
     return {
       token,
+
       user: {
         id: cliente.id,
         name: cliente.name,

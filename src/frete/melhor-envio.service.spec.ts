@@ -1,7 +1,7 @@
 import { HttpService } from '@nestjs/axios';
 import { ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AxiosResponse } from 'axios';
+import type { AxiosResponse } from 'axios';
 import { of, throwError } from 'rxjs';
 
 import { MelhorEnvioService } from './melhor-envio.service';
@@ -43,7 +43,7 @@ describe('MelhorEnvioService', () => {
     );
   });
 
-  it('deve enviar a cotação e normalizar as opções retornadas', async () => {
+  it('deve enviar a cotação com timeout e normalizar as opções retornadas', async () => {
     const response = {
       data: [
         {
@@ -133,6 +133,8 @@ describe('MelhorEnvioService', () => {
 
           'Content-Type': 'application/json',
         },
+
+        timeout: 15_000,
       },
     );
   });
@@ -145,6 +147,7 @@ describe('MelhorEnvioService', () => {
           name: 'SEDEX',
           price: '42.50',
           delivery_time: 3,
+
           company: {
             name: 'Correios',
           },
@@ -195,6 +198,7 @@ describe('MelhorEnvioService', () => {
           name: 'Transportadora',
           price: '30.00',
           delivery_time: 5,
+
           company: {
             name: 'Transportadora Teste',
           },
@@ -248,6 +252,7 @@ describe('MelhorEnvioService', () => {
     post.mockReturnValue(
       throwError(() => ({
         isAxiosError: true,
+
         response: {
           status: 500,
         },
@@ -258,6 +263,7 @@ describe('MelhorEnvioService', () => {
       service.calcularFrete({
         originZipCode: '62300000',
         destinationZipCode: '60000000',
+
         items: [
           {
             productId: 1,

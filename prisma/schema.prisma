@@ -17,9 +17,16 @@ enum StatusPedido {
   PAGO
   CONFIRMADO
   PREPARANDO
+  CANCELAMENTO_PENDENTE
   ENVIADO
   ENTREGUE
   CANCELADO
+}
+
+enum StatusCheckoutPedido {
+  CRIANDO
+  PRONTO
+  FALHOU
 }
 
 model Cliente {
@@ -32,6 +39,8 @@ model Cliente {
 
   role   Role    @default(CLIENTE)
   active Boolean @default(true)
+
+  tokenVersion Int @default(0)
 
   phone         String? @db.VarChar(20)
   street        String? @db.VarChar(160)
@@ -71,6 +80,7 @@ model Produto {
   description   String? @db.Text
   price         Decimal @db.Decimal(10, 2)
   stockQuantity Int
+
   imageUrl      String? @db.VarChar(500)
   imagePublicId String? @db.VarChar(500)
 
@@ -122,7 +132,9 @@ model Pedido {
 
   items      PedidoItem[]
   pagamentos Pagamento[]
+  checkout   CheckoutPedido?
 
+  @@index([status, paymentExpiresAt])
   @@map("pedidos")
 }
 
@@ -142,6 +154,25 @@ model PedidoItem {
   @@map("pedido_items")
 }
 
+model CheckoutPedido {
+  id Int @id @default(autoincrement())
+
+  provider String @default("MERCADO_PAGO") @db.VarChar(30)
+
+  preferenceId String? @unique @db.VarChar(120)
+  checkoutUrl  String? @db.VarChar(1000)
+
+  status StatusCheckoutPedido @default(CRIANDO)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pedidoId Int    @unique
+  pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@map("checkout_pedidos")
+}
+
 model Pagamento {
   id Int @id @default(autoincrement())
 
@@ -154,6 +185,11 @@ model Pagamento {
   statusDetail String? @db.VarChar(120)
 
   approvedAt DateTime?
+
+  refundId     String?  @unique @db.VarChar(120)
+  refundStatus String?  @db.VarChar(50)
+  refundAmount Decimal? @db.Decimal(10, 2)
+  refundedAt   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

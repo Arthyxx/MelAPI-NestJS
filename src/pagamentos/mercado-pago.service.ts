@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'crypto';
 import { isAxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
 
@@ -20,6 +21,7 @@ export interface MercadoPagoPreferenceInput {
   pedidoId: number;
   clienteId: number;
   clienteEmail: string;
+  paymentExpiresAt: Date;
   items: MercadoPagoPreferenceItem[];
 }
 
@@ -36,6 +38,12 @@ interface MercadoPagoPreferenceRequest {
     pedido_id: number;
     cliente_id: number;
   };
+
+  expires: boolean;
+
+  expiration_date_from: string;
+
+  expiration_date_to: string;
 
   back_urls?: {
     success: string;
@@ -81,9 +89,27 @@ export interface MercadoPagoPaymentResult {
   pedidoId: number | null;
 }
 
+interface MercadoPagoRefundResponse {
+  id?: number | string;
+  payment_id?: number | string;
+  amount?: number;
+  status?: string;
+  date_created?: string;
+}
+
+export interface MercadoPagoRefundResult {
+  refundId: string;
+  paymentId: string;
+  amount: number;
+  status: string;
+  createdAt: Date | null;
+}
+
 @Injectable()
 export class MercadoPagoService {
   private readonly logger = new Logger(MercadoPagoService.name);
+
+  private readonly requestTimeoutMs = 15_000;
 
   constructor(
     private readonly httpService: HttpService,
@@ -114,6 +140,12 @@ export class MercadoPagoService {
         pedido_id: input.pedidoId,
         cliente_id: input.clienteId,
       },
+
+      expires: true,
+
+      expiration_date_from: new Date().toISOString(),
+
+      expiration_date_to: input.paymentExpiresAt.toISOString(),
     };
 
     if (frontendUrl && this.canUseBackUrls(frontendUrl)) {
@@ -143,6 +175,7 @@ export class MercadoPagoService {
           body,
           {
             headers: this.buildHeaders(accessToken),
+            timeout: this.requestTimeoutMs,
           },
         ),
       );
@@ -175,7 +208,7 @@ export class MercadoPagoService {
         this.logger.error(
           `Erro ao criar preferência no Mercado Pago. Status: ${
             error.response?.status ?? 'desconhecido'
-          }. Resposta: ${JSON.stringify(error.response?.data ?? null)}`,
+          }.`,
         );
       } else {
         this.logger.error(
@@ -203,6 +236,7 @@ export class MercadoPagoService {
           `${baseUrl}/v1/payments/${encodeURIComponent(paymentId)}`,
           {
             headers: this.buildHeaders(accessToken),
+            timeout: this.requestTimeoutMs,
           },
         ),
       );
@@ -262,7 +296,7 @@ export class MercadoPagoService {
         this.logger.error(
           `Erro ao consultar pagamento ${paymentId} no Mercado Pago. Status: ${
             error.response?.status ?? 'desconhecido'
-          }. Resposta: ${JSON.stringify(error.response?.data ?? null)}`,
+          }.`,
         );
       } else {
         this.logger.error(
@@ -273,6 +307,91 @@ export class MercadoPagoService {
 
       throw new ServiceUnavailableException(
         'Não foi possível validar o pagamento no Mercado Pago.',
+      );
+    }
+  }
+
+  async reembolsarPagamento(
+    paymentId: string,
+  ): Promise<MercadoPagoRefundResult> {
+    const accessToken = this.getAccessToken();
+
+    const baseUrl = this.configService.getOrThrow<string>(
+      'MERCADO_PAGO_BASE_URL',
+    );
+
+    const idempotencyKey = createHash('sha256')
+      .update(`refund:${paymentId}`)
+      .digest('hex');
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post<MercadoPagoRefundResponse>(
+          `${baseUrl}/v1/payments/${encodeURIComponent(paymentId)}/refunds`,
+          {},
+          {
+            headers: {
+              ...this.buildHeaders(accessToken),
+              'X-Idempotency-Key': idempotencyKey,
+            },
+            timeout: this.requestTimeoutMs,
+          },
+        ),
+      );
+
+      const refund = response.data;
+
+      if (
+        refund.id === undefined ||
+        refund.payment_id === undefined ||
+        typeof refund.amount !== 'number' ||
+        !refund.status
+      ) {
+        this.logger.error(
+          `Resposta inválida ao reembolsar pagamento ${paymentId} no Mercado Pago.`,
+        );
+
+        throw new ServiceUnavailableException(
+          'Não foi possível confirmar o reembolso.',
+        );
+      }
+
+      const createdAt = refund.date_created
+        ? new Date(refund.date_created)
+        : null;
+
+      return {
+        refundId: String(refund.id),
+
+        paymentId: String(refund.payment_id),
+
+        amount: refund.amount,
+
+        status: refund.status,
+
+        createdAt:
+          createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : null,
+      };
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) {
+        throw error;
+      }
+
+      if (isAxiosError(error)) {
+        this.logger.error(
+          `Erro ao reembolsar pagamento ${paymentId} no Mercado Pago. Status: ${
+            error.response?.status ?? 'desconhecido'
+          }.`,
+        );
+      } else {
+        this.logger.error(
+          `Erro ao reembolsar pagamento ${paymentId} no Mercado Pago.`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+
+      throw new ServiceUnavailableException(
+        'Não foi possível realizar o reembolso no Mercado Pago.',
       );
     }
   }

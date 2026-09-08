@@ -12,13 +12,19 @@ describe('validateEnvironment', () => {
       JWT_SECRET: jwtSecret,
       JWT_EXPIRES_IN: '1h',
       PORT: 3000,
+
       CLOUDINARY_CLOUD_NAME: 'mel-api-cloud',
       CLOUDINARY_API_KEY: '123456789012345',
       CLOUDINARY_API_SECRET: 'cloudinary-api-secret-example',
+
       SHIPPING_ORIGIN_ZIP_CODE: '62300000',
+
       MELHOR_ENVIO_BASE_URL: 'https://sandbox.melhorenvio.com.br',
       MELHOR_ENVIO_USER_AGENT:
         'Apiario Vitoria Seven (apiariovitoriaseven@gmail.com)',
+
+      MERCADO_PAGO_BASE_URL: 'https://api.mercadopago.com',
+
       ...overrides,
     };
   }
@@ -55,6 +61,8 @@ describe('validateEnvironment', () => {
     );
 
     expect(result.MELHOR_ENVIO_ACCESS_TOKEN).toBeUndefined();
+
+    expect(result.MERCADO_PAGO_BASE_URL).toBe('https://api.mercadopago.com');
   });
 
   it('deve aceitar token do Melhor Envio quando configurado', () => {
@@ -208,5 +216,25 @@ describe('validateEnvironment', () => {
         }),
       ),
     ).toThrow('Configuração de ambiente inválida:');
+  });
+
+  it('deve rejeitar configuração sem MERCADO_PAGO_BASE_URL', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidConfig({
+          MERCADO_PAGO_BASE_URL: '',
+        }),
+      ),
+    ).toThrow('Configuração de ambiente inválida:');
+  });
+
+  it('deve rejeitar MERCADO_PAGO_BASE_URL inválida', () => {
+    expect(() =>
+      validateEnvironment(
+        createValidConfig({
+          MERCADO_PAGO_BASE_URL: 'mercado-pago',
+        }),
+      ),
+    ).toThrow('MERCADO_PAGO_BASE_URL deve ser uma URL válida.');
   });
 });

@@ -3,12 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { Role } from '@prisma/client';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+
 import { PrismaService } from '../prisma/prisma.service';
 
 interface JwtPayload {
   sub: number;
   email: string;
   role: Role;
+  tokenVersion: number;
 }
 
 @Injectable()
@@ -35,15 +37,21 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Token inválido.');
     }
 
+    if (!Number.isInteger(payload.tokenVersion) || payload.tokenVersion < 0) {
+      throw new UnauthorizedException('Token inválido.');
+    }
+
     const cliente = await this.prisma.cliente.findUnique({
       where: {
         id: payload.sub,
       },
+
       select: {
         id: true,
         email: true,
         role: true,
         active: true,
+        tokenVersion: true,
       },
     });
 
@@ -53,6 +61,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     if (!cliente.active) {
       throw new UnauthorizedException('Esta conta está desativada.');
+    }
+
+    if (cliente.tokenVersion !== payload.tokenVersion) {
+      throw new UnauthorizedException(
+        'Sua sessão não é mais válida. Faça login novamente.',
+      );
     }
 
     return {

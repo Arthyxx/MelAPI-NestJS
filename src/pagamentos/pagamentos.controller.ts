@@ -9,9 +9,11 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Role } from '@prisma/client';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import type { AuthUser } from '../common/types/auth-user.type';
 import { MercadoPagoWebhookService } from './mercado-pago-webhook.service';
 import { PagamentosService } from './pagamentos.service';
@@ -39,6 +41,17 @@ export class PagamentosController {
     user: AuthUser,
   ) {
     return this.pagamentosService.iniciarPagamento(user.sub, pedidoId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('pedidos/:pedidoId/reembolso')
+  @HttpCode(HttpStatus.OK)
+  cancelarPedidoComReembolso(
+    @Param('pedidoId', ParseIntPipe)
+    pedidoId: number,
+  ) {
+    return this.pagamentosService.cancelarPedidoComReembolso(pedidoId);
   }
 
   @Post('webhook')

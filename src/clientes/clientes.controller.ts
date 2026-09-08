@@ -12,15 +12,18 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
+
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
 import type { AuthUser } from '../common/types/auth-user.type';
+
 import { ClientesService } from './clientes.service';
 import {
   CreateAdminClienteDto,
   UpdateAdminClienteDto,
 } from './dto/admin-cliente.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { ClienteFilterDto } from './dto/cliente-filter.dto';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { PatchClienteDto } from './dto/patch-cliente.dto';
@@ -58,6 +61,15 @@ export class ClientesController {
   @Patch('me')
   updateMe(@CurrentUser() user: AuthUser, @Body() dto: PatchClienteDto) {
     return this.clientesService.updateMe(user.sub, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('me/password')
+  changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.clientesService.changePassword(user.sub, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

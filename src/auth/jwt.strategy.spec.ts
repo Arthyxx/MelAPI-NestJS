@@ -5,6 +5,8 @@ import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtStrategy } from './jwt.strategy';
 
+type JwtPayloadInput = Parameters<JwtStrategy['validate']>[0];
+
 describe('JwtStrategy', () => {
   let strategy: JwtStrategy;
 
@@ -41,6 +43,34 @@ describe('JwtStrategy', () => {
         sub: 0,
         email: 'teste@teste.com',
         role: Role.CLIENTE,
+        tokenVersion: 0,
+      }),
+    ).rejects.toThrow(new UnauthorizedException('Token inválido.'));
+
+    expect(prisma.cliente.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('deve rejeitar token sem tokenVersion', async () => {
+    const payload = {
+      sub: 10,
+      email: 'teste@teste.com',
+      role: Role.CLIENTE,
+    } as unknown as JwtPayloadInput;
+
+    await expect(strategy.validate(payload)).rejects.toThrow(
+      new UnauthorizedException('Token inválido.'),
+    );
+
+    expect(prisma.cliente.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('deve rejeitar token com tokenVersion negativo', async () => {
+    await expect(
+      strategy.validate({
+        sub: 10,
+        email: 'teste@teste.com',
+        role: Role.CLIENTE,
+        tokenVersion: -1,
       }),
     ).rejects.toThrow(new UnauthorizedException('Token inválido.'));
 
@@ -55,6 +85,7 @@ describe('JwtStrategy', () => {
         sub: 10,
         email: 'teste@teste.com',
         role: Role.CLIENTE,
+        tokenVersion: 0,
       }),
     ).rejects.toThrow(new UnauthorizedException('Usuário não encontrado.'));
   });
@@ -65,6 +96,7 @@ describe('JwtStrategy', () => {
       email: 'teste@teste.com',
       role: Role.CLIENTE,
       active: false,
+      tokenVersion: 0,
     });
 
     await expect(
@@ -72,8 +104,32 @@ describe('JwtStrategy', () => {
         sub: 10,
         email: 'teste@teste.com',
         role: Role.CLIENTE,
+        tokenVersion: 0,
       }),
     ).rejects.toThrow(new UnauthorizedException('Esta conta está desativada.'));
+  });
+
+  it('deve rejeitar token antigo quando tokenVersion da conta mudar', async () => {
+    prisma.cliente.findUnique.mockResolvedValue({
+      id: 10,
+      email: 'teste@teste.com',
+      role: Role.CLIENTE,
+      active: true,
+      tokenVersion: 2,
+    });
+
+    await expect(
+      strategy.validate({
+        sub: 10,
+        email: 'teste@teste.com',
+        role: Role.CLIENTE,
+        tokenVersion: 1,
+      }),
+    ).rejects.toThrow(
+      new UnauthorizedException(
+        'Sua sessão não é mais válida. Faça login novamente.',
+      ),
+    );
   });
 
   it('deve retornar os dados atuais do banco para uma conta válida', async () => {
@@ -82,23 +138,27 @@ describe('JwtStrategy', () => {
       email: 'novo@teste.com',
       role: Role.ADMIN,
       active: true,
+      tokenVersion: 3,
     });
 
     const result = await strategy.validate({
       sub: 10,
       email: 'antigo@teste.com',
       role: Role.CLIENTE,
+      tokenVersion: 3,
     });
 
     expect(prisma.cliente.findUnique).toHaveBeenCalledWith({
       where: {
         id: 10,
       },
+
       select: {
         id: true,
         email: true,
         role: true,
         active: true,
+        tokenVersion: true,
       },
     });
 

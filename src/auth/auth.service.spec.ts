@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
+import { GoogleAuthService } from './google-auth.service';
 
 jest.mock('bcrypt', () => ({
   compare: jest.fn(),
@@ -23,6 +24,10 @@ describe('AuthService', () => {
     signAsync: jest.Mock;
   };
 
+  const googleAuthService = {
+    verifyCredential: jest.fn(),
+  };
+
   const bcryptCompareMock = bcrypt.compare as jest.Mock;
 
   beforeEach(() => {
@@ -39,6 +44,7 @@ describe('AuthService', () => {
     service = new AuthService(
       prisma as unknown as PrismaService,
       jwtService as unknown as JwtService,
+      googleAuthService as unknown as GoogleAuthService,
     );
 
     jest.clearAllMocks();
@@ -77,6 +83,7 @@ describe('AuthService', () => {
       password: 'hash',
       role: Role.CLIENTE,
       active: false,
+      tokenVersion: 0,
     });
 
     await expect(
@@ -99,6 +106,7 @@ describe('AuthService', () => {
       password: 'hash-salvo',
       role: Role.CLIENTE,
       active: true,
+      tokenVersion: 0,
     });
 
     bcryptCompareMock.mockResolvedValue(false);
@@ -135,7 +143,7 @@ describe('AuthService', () => {
     });
   });
 
-  it('deve gerar JWT e retornar o usuário em login válido', async () => {
+  it('deve gerar JWT com tokenVersion e retornar o usuário em login válido', async () => {
     prisma.cliente.findUnique.mockResolvedValue({
       id: 10,
       name: 'Cliente Teste',
@@ -143,6 +151,7 @@ describe('AuthService', () => {
       password: 'hash-salvo',
       role: Role.CLIENTE,
       active: true,
+      tokenVersion: 3,
     });
 
     bcryptCompareMock.mockResolvedValue(true);
@@ -165,10 +174,12 @@ describe('AuthService', () => {
       sub: 10,
       email: 'cliente@teste.com',
       role: Role.CLIENTE,
+      tokenVersion: 3,
     });
 
     expect(result).toEqual({
       token: 'token-jwt-teste',
+
       user: {
         id: 10,
         name: 'Cliente Teste',

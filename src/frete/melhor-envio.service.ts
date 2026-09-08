@@ -34,6 +34,8 @@ interface MelhorEnvioOptionResponse {
 export class MelhorEnvioService {
   private readonly logger = new Logger(MelhorEnvioService.name);
 
+  private readonly requestTimeoutMs = 15_000;
+
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
@@ -103,6 +105,8 @@ export class MelhorEnvioService {
 
             'Content-Type': 'application/json',
           },
+
+          timeout: this.requestTimeoutMs,
         }),
       );
 

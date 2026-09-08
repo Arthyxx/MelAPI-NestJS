@@ -3,14 +3,17 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateAdminClienteDto,
   UpdateAdminClienteDto,
 } from './dto/admin-cliente.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { ClienteFilterDto } from './dto/cliente-filter.dto';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { PatchClienteDto } from './dto/patch-cliente.dto';
@@ -70,9 +73,11 @@ export class ClientesService {
         where,
         skip,
         take: limit,
+
         orderBy: {
           id: 'asc',
         },
+
         select: this.defaultSelect(),
       }),
 
@@ -85,6 +90,7 @@ export class ClientesService {
 
     return {
       content: clientes,
+
       pagination: {
         page,
         limit,
@@ -101,6 +107,7 @@ export class ClientesService {
       where: {
         id,
       },
+
       select: this.defaultSelect(),
     });
 
@@ -138,6 +145,7 @@ export class ClientesService {
         state: this.normalizeState(dto.state),
         zipCode: this.normalizeOptional(dto.zipCode),
       },
+
       select: this.defaultSelect(),
     });
   }
@@ -165,12 +173,76 @@ export class ClientesService {
         state: this.normalizeState(dto.state),
         zipCode: this.normalizeOptional(dto.zipCode),
       },
+
       select: this.defaultSelect(),
     });
   }
 
   async updateMe(clienteId: number, dto: PatchClienteDto) {
     return this.partialUpdate(clienteId, dto);
+  }
+
+  async changePassword(clienteId: number, dto: ChangePasswordDto) {
+    const cliente = await this.prisma.cliente.findUnique({
+      where: {
+        id: clienteId,
+      },
+
+      select: {
+        id: true,
+        password: true,
+      },
+    });
+
+    if (!cliente) {
+      throw new NotFoundException('Cliente não encontrado.');
+    }
+
+    if (!cliente.password) {
+      throw new BadRequestException(
+        'Esta conta não possui senha local. Entre usando sua conta Google.',
+      );
+    }
+
+    const currentPasswordMatches = await bcrypt.compare(
+      dto.currentPassword,
+      cliente.password,
+    );
+
+    if (!currentPasswordMatches) {
+      throw new UnauthorizedException('Senha atual inválida.');
+    }
+
+    const newPasswordMatchesCurrent = await bcrypt.compare(
+      dto.newPassword,
+      cliente.password,
+    );
+
+    if (newPasswordMatchesCurrent) {
+      throw new BadRequestException(
+        'A nova senha deve ser diferente da senha atual.',
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+
+    await this.prisma.cliente.update({
+      where: {
+        id: clienteId,
+      },
+
+      data: {
+        password: hashedPassword,
+
+        tokenVersion: {
+          increment: 1,
+        },
+      },
+    });
+
+    return {
+      message: 'Senha alterada com sucesso.',
+    };
   }
 
   async updateAdmin(
@@ -182,6 +254,7 @@ export class ClientesService {
       where: {
         id,
       },
+
       select: {
         id: true,
         role: true,
@@ -206,7 +279,6 @@ export class ClientesService {
     }
 
     const resultingRole = dto.role ?? cliente.role;
-
     const resultingActive = dto.active ?? cliente.active;
 
     const isRemovingActiveAdmin =
@@ -234,6 +306,10 @@ export class ClientesService {
 
     if (dto.password !== undefined) {
       data.password = await bcrypt.hash(dto.password, 10);
+
+      data.tokenVersion = {
+        increment: 1,
+      };
     }
 
     if (dto.role !== undefined) {
@@ -280,7 +356,9 @@ export class ClientesService {
       where: {
         id,
       },
+
       data,
+
       select: this.defaultSelect(),
     });
   }
@@ -298,10 +376,16 @@ export class ClientesService {
       where: {
         id,
       },
+
       data: {
         name: dto.name.trim(),
         email,
         password: hashedPassword,
+
+        tokenVersion: {
+          increment: 1,
+        },
+
         phone: this.normalizeOptional(dto.phone),
         street: this.normalizeOptional(dto.street),
         addressNumber: this.normalizeOptional(dto.addressNumber),
@@ -311,6 +395,7 @@ export class ClientesService {
         state: this.normalizeState(dto.state),
         zipCode: this.normalizeOptional(dto.zipCode),
       },
+
       select: this.defaultSelect(),
     });
   }
@@ -322,18 +407,6 @@ export class ClientesService {
 
     if (dto.name !== undefined) {
       data.name = dto.name.trim();
-    }
-
-    if (dto.email !== undefined) {
-      const email = dto.email.trim().toLowerCase();
-
-      await this.ensureEmailIsAvailable(email, id);
-
-      data.email = email;
-    }
-
-    if (dto.password !== undefined) {
-      data.password = await bcrypt.hash(dto.password, 10);
     }
 
     if (dto.phone !== undefined) {
@@ -372,7 +445,9 @@ export class ClientesService {
       where: {
         id,
       },
+
       data,
+
       select: this.defaultSelect(),
     });
   }
@@ -382,10 +457,12 @@ export class ClientesService {
       where: {
         id,
       },
+
       select: {
         id: true,
         role: true,
         active: true,
+
         _count: {
           select: {
             pedidos: true,
@@ -410,6 +487,7 @@ export class ClientesService {
 
     if (cliente._count.pedidos > 0) {
       await this.deactivateCliente(id);
+
       return;
     }
 
@@ -425,6 +503,7 @@ export class ClientesService {
         error.code === 'P2003'
       ) {
         await this.deactivateCliente(id);
+
         return;
       }
 
@@ -437,6 +516,7 @@ export class ClientesService {
       where: {
         id,
       },
+
       select: {
         id: true,
       },
@@ -454,6 +534,7 @@ export class ClientesService {
     const cliente = await this.prisma.cliente.findFirst({
       where: {
         email,
+
         NOT:
           ignoreClienteId !== undefined
             ? {
@@ -461,6 +542,7 @@ export class ClientesService {
               }
             : undefined,
       },
+
       select: {
         id: true,
       },
@@ -477,6 +559,7 @@ export class ClientesService {
         id: {
           not: adminId,
         },
+
         role: Role.ADMIN,
         active: true,
       },
@@ -494,6 +577,7 @@ export class ClientesService {
       where: {
         id,
       },
+
       data: {
         active: false,
       },
