@@ -211,9 +211,9 @@ export class MercadoPagoService {
           }.`,
         );
       } else {
-        this.logger.error(
+        this.logUnexpectedError(
           'Erro ao criar preferência no Mercado Pago.',
-          error instanceof Error ? error.stack : undefined,
+          error,
         );
       }
 
@@ -299,9 +299,9 @@ export class MercadoPagoService {
           }.`,
         );
       } else {
-        this.logger.error(
+        this.logUnexpectedError(
           `Erro ao consultar pagamento ${paymentId} no Mercado Pago.`,
-          error instanceof Error ? error.stack : undefined,
+          error,
         );
       }
 
@@ -384,9 +384,9 @@ export class MercadoPagoService {
           }.`,
         );
       } else {
-        this.logger.error(
+        this.logUnexpectedError(
           `Erro ao reembolsar pagamento ${paymentId} no Mercado Pago.`,
-          error instanceof Error ? error.stack : undefined,
+          error,
         );
       }
 
@@ -394,6 +394,12 @@ export class MercadoPagoService {
         'Não foi possível realizar o reembolso no Mercado Pago.',
       );
     }
+  }
+
+  private logUnexpectedError(context: string, error: unknown) {
+    const errorType = error instanceof Error ? error.name : 'desconhecido';
+
+    this.logger.error(`${context} Tipo: ${errorType}.`);
   }
 
   private getAccessToken() {

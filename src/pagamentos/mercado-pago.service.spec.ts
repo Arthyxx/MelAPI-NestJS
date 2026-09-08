@@ -1,5 +1,5 @@
 import { HttpService } from '@nestjs/axios';
-import { ServiceUnavailableException } from '@nestjs/common';
+import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AxiosResponse } from 'axios';
 import { of, throwError } from 'rxjs';
@@ -40,6 +40,7 @@ interface PreferenceBody {
 
 describe('MercadoPagoService', () => {
   let service: MercadoPagoService;
+  let loggerErrorSpy: jest.SpyInstance;
 
   const httpService = {
     get: jest.fn(),
@@ -78,6 +79,8 @@ describe('MercadoPagoService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+
     configService.getOrThrow.mockImplementation((key: string) => {
       if (key === 'MERCADO_PAGO_BASE_URL') {
         return 'https://api.mercadopago.com';
@@ -102,6 +105,10 @@ describe('MercadoPagoService', () => {
       httpService as unknown as HttpService,
       configService as unknown as ConfigService,
     );
+  });
+
+  afterEach(() => {
+    loggerErrorSpy.mockRestore();
   });
 
   it('should be defined', () => {
@@ -434,15 +441,29 @@ describe('MercadoPagoService', () => {
     );
   });
 
-  it('deve transformar falha HTTP em ServiceUnavailableException', async () => {
+  it('deve transformar erro inesperado em ServiceUnavailableException sem expor detalhes no log', async () => {
     httpService.get.mockReturnValue(
-      throwError(() => new Error('Falha simulada')),
+      throwError(() => new Error('token_secreto=SUPER-SEGREDO')),
     );
 
     await expect(service.buscarPagamento('123')).rejects.toThrow(
       new ServiceUnavailableException(
         'Não foi possível validar o pagamento no Mercado Pago.',
       ),
+    );
+
+    expect(loggerErrorSpy).toHaveBeenCalledTimes(1);
+
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      'Erro ao consultar pagamento 123 no Mercado Pago. Tipo: Error.',
+    );
+
+    expect(loggerErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('SUPER-SEGREDO'),
+    );
+
+    expect(loggerErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('token_secreto'),
     );
   });
 });
