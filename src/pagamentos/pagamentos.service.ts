@@ -614,9 +614,10 @@ export class PagamentosService {
         },
       });
     } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'desconhecido';
+
       this.logger.error(
-        `Não foi possível marcar o checkout do pedido ${pedidoId} como falho.`,
-        error instanceof Error ? error.stack : undefined,
+        `Não foi possível marcar o checkout do pedido ${pedidoId} como falho. Tipo: ${errorType}.`,
       );
     }
   }
