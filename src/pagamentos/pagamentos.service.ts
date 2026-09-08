@@ -205,15 +205,33 @@ export class PagamentosService {
       throw new NotFoundException('Pedido não encontrado.');
     }
 
-    if (pedido.status === StatusPedido.CANCELADO) {
-      return {
-        pedidoId: pedido.id,
-        status: StatusPedido.CANCELADO,
-        refunded: true,
-      };
-    }
-
     const pagamento = pedido.pagamentos[0];
+
+    if (pedido.status === StatusPedido.CANCELADO) {
+      if (
+        pagamento?.refundStatus === 'approved' &&
+        pagamento.refundId &&
+        pagamento.refundAmount !== null
+      ) {
+        return {
+          pedidoId: pedido.id,
+          status: StatusPedido.CANCELADO,
+          refunded: true,
+          refundId: pagamento.refundId,
+          refundAmount: Number(pagamento.refundAmount),
+        };
+      }
+
+      if (!pagamento?.paymentId) {
+        throw new BadRequestException(
+          'Este pedido já está cancelado e não possui pagamento aprovado para reembolso.',
+        );
+      }
+
+      throw new ConflictException(
+        'Este pedido já está cancelado, mas não possui reembolso aprovado registrado.',
+      );
+    }
 
     if (!pagamento?.paymentId) {
       throw new BadRequestException(
@@ -224,7 +242,7 @@ export class PagamentosService {
     if (
       pagamento.refundStatus === 'approved' &&
       pagamento.refundId &&
-      pagamento.refundAmount
+      pagamento.refundAmount !== null
     ) {
       await this.pedidosService.finalizarCancelamentoReembolsado(pedido.id);
 
@@ -438,7 +456,7 @@ export class PagamentosService {
     if (
       pagamento?.refundStatus === 'approved' &&
       pagamento.refundId &&
-      pagamento.refundAmount
+      pagamento.refundAmount !== null
     ) {
       return;
     }

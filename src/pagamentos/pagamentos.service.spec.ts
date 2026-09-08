@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma, StatusCheckoutPedido, StatusPedido } from '@prisma/client';
@@ -247,6 +248,102 @@ describe('PagamentosService', () => {
       refundId: 'refund-123',
       refundAmount: 75,
     });
+  });
+
+  it('deve retornar os dados reais do reembolso quando pedido já estiver cancelado e reembolsado', async () => {
+    prisma.pedido.findUnique.mockResolvedValue({
+      id: 1,
+      status: StatusPedido.CANCELADO,
+      totalPrice: new Prisma.Decimal('75.00'),
+
+      pagamentos: [
+        {
+          id: 10,
+          paymentId: 'pay-123',
+          status: 'approved',
+          refundId: 'refund-123',
+          refundStatus: 'approved',
+          refundAmount: new Prisma.Decimal('75.00'),
+          refundedAt: new Date(),
+        },
+      ],
+    });
+
+    const result = await service.cancelarPedidoComReembolso(1);
+
+    expect(result).toEqual({
+      pedidoId: 1,
+      status: StatusPedido.CANCELADO,
+      refunded: true,
+      refundId: 'refund-123',
+      refundAmount: 75,
+    });
+
+    expect(mercadoPagoService.reembolsarPagamento).not.toHaveBeenCalled();
+
+    expect(
+      pedidosService.iniciarCancelamentoComReembolso,
+    ).not.toHaveBeenCalled();
+
+    expect(
+      pedidosService.finalizarCancelamentoReembolsado,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('não deve informar reembolso quando pedido cancelado não possuir pagamento aprovado', async () => {
+    prisma.pedido.findUnique.mockResolvedValue({
+      id: 1,
+      status: StatusPedido.CANCELADO,
+      totalPrice: new Prisma.Decimal('75.00'),
+      pagamentos: [],
+    });
+
+    await expect(service.cancelarPedidoComReembolso(1)).rejects.toThrow(
+      new BadRequestException(
+        'Este pedido já está cancelado e não possui pagamento aprovado para reembolso.',
+      ),
+    );
+
+    expect(mercadoPagoService.reembolsarPagamento).not.toHaveBeenCalled();
+
+    expect(
+      pedidosService.finalizarCancelamentoReembolsado,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('não deve informar reembolso quando pedido cancelado possuir pagamento aprovado sem reembolso confirmado', async () => {
+    prisma.pedido.findUnique.mockResolvedValue({
+      id: 1,
+      status: StatusPedido.CANCELADO,
+      totalPrice: new Prisma.Decimal('75.00'),
+
+      pagamentos: [
+        {
+          id: 10,
+          paymentId: 'pay-123',
+          status: 'approved',
+          refundId: null,
+          refundStatus: null,
+          refundAmount: null,
+        },
+      ],
+    });
+
+    await expect(service.cancelarPedidoComReembolso(1)).rejects.toThrow(
+      new ConflictException(
+        'Este pedido já está cancelado, mas não possui reembolso aprovado registrado.',
+      ),
+    );
+
+    expect(mercadoPagoService.reembolsarPagamento).not.toHaveBeenCalled();
+
+    expect(
+      pedidosService.iniciarCancelamentoComReembolso,
+    ).not.toHaveBeenCalled();
+
+    expect(
+      pedidosService.finalizarCancelamentoReembolsado,
+    ).not.toHaveBeenCalled();
   });
 
   it('não deve cancelar pedido quando o Mercado Pago não confirmar o reembolso', async () => {
