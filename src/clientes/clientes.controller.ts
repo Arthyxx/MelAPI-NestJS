@@ -11,6 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Role } from '@prisma/client';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -32,6 +33,12 @@ import { PatchClienteDto } from './dto/patch-cliente.dto';
 export class ClientesController {
   constructor(private readonly clientesService: ClientesService) {}
 
+  @Throttle({
+    default: {
+      limit: 5,
+      ttl: 60_000,
+    },
+  })
   @Post()
   create(@Body() dto: CreateClienteDto) {
     return this.clientesService.create(dto);
@@ -63,6 +70,12 @@ export class ClientesController {
     return this.clientesService.updateMe(user.sub, dto);
   }
 
+  @Throttle({
+    default: {
+      limit: 5,
+      ttl: 600_000,
+    },
+  })
   @UseGuards(JwtAuthGuard)
   @Patch('me/password')
   changePassword(

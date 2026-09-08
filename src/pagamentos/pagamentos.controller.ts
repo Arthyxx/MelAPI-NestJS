@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -30,6 +31,12 @@ export class PagamentosController {
     private readonly mercadoPagoWebhookService: MercadoPagoWebhookService,
   ) {}
 
+  @Throttle({
+    default: {
+      limit: 10,
+      ttl: 60_000,
+    },
+  })
   @UseGuards(JwtAuthGuard)
   @Post('pedidos/:pedidoId/checkout')
   @HttpCode(HttpStatus.CREATED)
@@ -43,6 +50,12 @@ export class PagamentosController {
     return this.pagamentosService.iniciarPagamento(user.sub, pedidoId);
   }
 
+  @Throttle({
+    default: {
+      limit: 5,
+      ttl: 600_000,
+    },
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Post('pedidos/:pedidoId/reembolso')
@@ -54,6 +67,7 @@ export class PagamentosController {
     return this.pagamentosService.cancelarPedidoComReembolso(pedidoId);
   }
 
+  @SkipThrottle()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   async receberWebhook(
