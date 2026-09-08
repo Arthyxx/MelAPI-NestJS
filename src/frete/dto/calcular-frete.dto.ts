@@ -1,23 +1,26 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsInt,
-  IsPositive,
   IsString,
   Matches,
+  Max,
+  Min,
   ValidateNested,
 } from 'class-validator';
 
 export class FreteItemDto {
   @Type(() => Number)
   @IsInt()
-  @IsPositive()
+  @Min(1)
   productId!: number;
 
   @Type(() => Number)
   @IsInt()
-  @IsPositive()
+  @Min(1)
+  @Max(100)
   quantity!: number;
 }
 
@@ -30,6 +33,7 @@ export class CalcularFreteDto {
 
   @IsArray()
   @ArrayMinSize(1)
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => FreteItemDto)
   items!: FreteItemDto[];
