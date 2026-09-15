@@ -31,7 +31,6 @@ export class PagamentosService {
         id: pedidoId,
         clienteId,
       },
-
       include: {
         cliente: {
           select: {
@@ -39,7 +38,6 @@ export class PagamentosService {
             email: true,
           },
         },
-
         items: {
           include: {
             produto: {
@@ -108,11 +106,9 @@ export class PagamentosService {
     if (shippingPrice > 0) {
       items.push({
         id: `frete-${pedido.id}`,
-
         title: pedido.shippingServiceName
           ? `Frete - ${pedido.shippingServiceName}`
           : 'Frete',
-
         quantity: 1,
         currency_id: 'BRL',
         unit_price: shippingPrice,
@@ -133,7 +129,6 @@ export class PagamentosService {
           where: {
             pedidoId: pedido.id,
           },
-
           data: {
             status: StatusCheckoutPedido.PRONTO,
             preferenceId: preference.preferenceId,
@@ -176,26 +171,21 @@ export class PagamentosService {
       where: {
         id: pedidoId,
       },
-
       select: {
         id: true,
         status: true,
         totalPrice: true,
-
         pagamentos: {
           where: {
             provider: 'MERCADO_PAGO',
             status: 'approved',
-
             paymentId: {
               not: null,
             },
           },
-
           orderBy: {
             createdAt: 'desc',
           },
-
           take: 1,
         },
       },
@@ -287,7 +277,6 @@ export class PagamentosService {
       where: {
         id: pagamento.id,
       },
-
       data: {
         refundId: refund.refundId,
         refundStatus: refund.status,
@@ -319,7 +308,6 @@ export class PagamentosService {
       where: {
         id: pedidoId,
       },
-
       select: {
         id: true,
         status: true,
@@ -359,29 +347,43 @@ export class PagamentosService {
           provider: 'MERCADO_PAGO',
           paymentId: null,
         },
-
         orderBy: {
           createdAt: 'desc',
         },
       }));
 
-    if (!tentativaPendente) {
-      throw new NotFoundException('Tentativa de pagamento não encontrada.');
-    }
+    const pagamentoId = await this.prisma.$transaction(async (tx) => {
+      const paymentData = {
+        paymentId: payment.paymentId,
+        status: payment.status,
+        statusDetail: payment.statusDetail,
+        approvedAt: payment.approvedAt,
+      };
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.pagamento.update({
-        where: {
-          id: tentativaPendente.id,
-        },
+      let registroPagamentoId: number;
 
-        data: {
-          paymentId: payment.paymentId,
-          status: payment.status,
-          statusDetail: payment.statusDetail,
-          approvedAt: payment.approvedAt,
-        },
-      });
+      if (tentativaPendente) {
+        await tx.pagamento.update({
+          where: {
+            id: tentativaPendente.id,
+          },
+          data: paymentData,
+        });
+
+        registroPagamentoId = tentativaPendente.id;
+      } else {
+        // Cada nova tentativa recebe seu próprio registro.
+        // preferenceId permanece no registro original, pois é único.
+        const novoPagamento = await tx.pagamento.create({
+          data: {
+            pedidoId: pedido.id,
+            provider: 'MERCADO_PAGO',
+            ...paymentData,
+          },
+        });
+
+        registroPagamentoId = novoPagamento.id;
+      }
 
       if (
         payment.status === 'approved' &&
@@ -392,7 +394,6 @@ export class PagamentosService {
             id: pedido.id,
             status: StatusPedido.PENDENTE,
           },
-
           data: {
             status: StatusPedido.PAGO,
           },
@@ -404,6 +405,8 @@ export class PagamentosService {
           );
         }
       }
+
+      return registroPagamentoId;
     });
 
     if (payment.status === 'approved') {
@@ -411,7 +414,6 @@ export class PagamentosService {
         where: {
           id: pedido.id,
         },
-
         select: {
           status: true,
         },
@@ -425,7 +427,7 @@ export class PagamentosService {
 
       if (pedidoAtual.status === StatusPedido.CANCELADO) {
         await this.reembolsarPagamentoAprovadoDePedidoCancelado(
-          tentativaPendente.id,
+          pagamentoId,
           pedido.id,
           pedido.totalPrice,
           payment.paymentId,
@@ -493,7 +495,6 @@ export class PagamentosService {
       where: {
         id: pagamentoId,
       },
-
       data: {
         refundId: refund.refundId,
         refundStatus: refund.status,
@@ -554,7 +555,6 @@ export class PagamentosService {
           pedidoId,
           status: StatusCheckoutPedido.FALHOU,
         },
-
         data: {
           status: StatusCheckoutPedido.CRIANDO,
           preferenceId: null,
@@ -608,7 +608,6 @@ export class PagamentosService {
           pedidoId,
           status: StatusCheckoutPedido.CRIANDO,
         },
-
         data: {
           status: StatusCheckoutPedido.FALHOU,
         },
