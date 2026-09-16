@@ -1,4 +1,9 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutoFilterDto } from './dto/produto-filter.dto';
@@ -30,6 +35,45 @@ describe('ProdutosService', () => {
     cleanupImage: jest.Mock;
   };
 
+  const criarProduto = (stockQuantity = 10) => ({
+    id: 10,
+    name: 'Mel Teste',
+    description: null,
+    price: new Prisma.Decimal('40.00'),
+    stockQuantity,
+    imageUrl: null,
+    imagePublicId: null,
+    weightKg: null,
+    heightCm: null,
+    widthCm: null,
+    lengthCm: null,
+    active: true,
+    createdAt: new Date('2026-09-15T12:00:00.000Z'),
+    updatedAt: new Date('2026-09-15T12:00:00.000Z'),
+    categoryId: 1,
+    category: {
+      id: 1,
+      name: 'Mel',
+    },
+    avaliacoes: [],
+  });
+
+  const prepararEdicao = (stockQuantity = 10) => {
+    const produto = criarProduto(stockQuantity);
+
+    prisma.produto.findUnique.mockResolvedValue(produto);
+    prisma.produto.findFirst.mockResolvedValue(null);
+
+    prisma.categoria.findUnique.mockResolvedValue({
+      id: 1,
+      active: true,
+    });
+
+    prisma.produto.update.mockResolvedValue(produto);
+
+    return produto;
+  };
+
   beforeEach(() => {
     prisma = {
       produto: {
@@ -41,19 +85,15 @@ describe('ProdutosService', () => {
         delete: jest.fn(),
         count: jest.fn(),
       },
-
       categoria: {
         findUnique: jest.fn(),
       },
-
       $transaction: jest.fn(),
     };
 
     produtoImageService = {
       cleanupOrphanImage: jest.fn().mockResolvedValue(undefined),
-
       cleanupReplacedImage: jest.fn().mockResolvedValue(undefined),
-
       cleanupImage: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -75,22 +115,21 @@ describe('ProdutosService', () => {
       active: false,
     });
 
-    const dto = {
-      name: 'Mel Teste',
-      price: 35,
-      stockQuantity: 10,
-      categoryId: 1,
-      active: true,
-    };
-
-    await expect(service.create(dto)).rejects.toThrow(
+    await expect(
+      service.create({
+        name: 'Mel Teste',
+        price: 35,
+        stockQuantity: 10,
+        categoryId: 1,
+        active: true,
+      }),
+    ).rejects.toThrow(
       new ConflictException(
         'Não é possível vincular produto a uma categoria inativa.',
       ),
     );
 
     expect(prisma.produto.create).not.toHaveBeenCalled();
-
     expect(produtoImageService.cleanupOrphanImage).toHaveBeenCalledWith(null);
   });
 
@@ -102,17 +141,17 @@ describe('ProdutosService', () => {
       active: false,
     });
 
-    const dto = {
-      name: 'Mel com Imagem',
-      price: 35,
-      stockQuantity: 10,
-      categoryId: 1,
-      active: true,
-      imageUrl: 'https://res.cloudinary.com/test/image/upload/mel.jpg',
-      imagePublicId: 'mel-api/produtos/upload-orfao',
-    };
-
-    await expect(service.create(dto)).rejects.toThrow(
+    await expect(
+      service.create({
+        name: 'Mel com Imagem',
+        price: 35,
+        stockQuantity: 10,
+        categoryId: 1,
+        active: true,
+        imageUrl: 'https://res.cloudinary.com/test/image/upload/mel.jpg',
+        imagePublicId: 'mel-api/produtos/upload-orfao',
+      }),
+    ).rejects.toThrow(
       new ConflictException(
         'Não é possível vincular produto a uma categoria inativa.',
       ),
@@ -126,36 +165,31 @@ describe('ProdutosService', () => {
   });
 
   it('deve solicitar limpeza da nova imagem quando a atualização falhar', async () => {
+    prepararEdicao();
+
     prisma.produto.findUnique.mockResolvedValue({
       id: 10,
       imagePublicId: 'mel-api/produtos/imagem-antiga',
-    });
-
-    prisma.produto.findFirst.mockResolvedValue(null);
-
-    prisma.categoria.findUnique.mockResolvedValue({
-      id: 1,
-      active: true,
+      stockQuantity: 10,
     });
 
     prisma.produto.update.mockRejectedValue(
       new Error('Falha ao atualizar produto.'),
     );
 
-    const dto = {
-      name: 'Mel Atualizado',
-      description: 'Descrição',
-      price: 40,
-      stockQuantity: 15,
-      categoryId: 1,
-      active: true,
-      imageUrl: 'https://res.cloudinary.com/test/image/upload/nova.jpg',
-      imagePublicId: 'mel-api/produtos/imagem-nova',
-    };
-
-    await expect(service.update(10, dto)).rejects.toThrow(
-      'Falha ao atualizar produto.',
-    );
+    await expect(
+      service.update(10, {
+        name: 'Mel Atualizado',
+        description: 'Descrição',
+        price: 40,
+        stockQuantity: 15,
+        expectedStockQuantity: 10,
+        categoryId: 1,
+        active: true,
+        imageUrl: 'https://res.cloudinary.com/test/image/upload/nova.jpg',
+        imagePublicId: 'mel-api/produtos/imagem-nova',
+      }),
+    ).rejects.toThrow('Falha ao atualizar produto.');
 
     expect(produtoImageService.cleanupOrphanImage).toHaveBeenCalledTimes(1);
 
@@ -177,59 +211,36 @@ describe('ProdutosService', () => {
       active: false,
     });
 
-    await expect(
-      service.partialUpdate(10, {
-        categoryId: 2,
-      }),
-    ).rejects.toThrow(
+    await expect(service.partialUpdate(10, { categoryId: 2 })).rejects.toThrow(
       new ConflictException(
         'Não é possível vincular produto a uma categoria inativa.',
       ),
     );
 
     expect(prisma.produto.update).not.toHaveBeenCalled();
-
     expect(produtoImageService.cleanupOrphanImage).toHaveBeenCalledWith(null);
   });
 
   it('deve solicitar remoção da imagem antiga após atualização bem-sucedida', async () => {
+    const produto = prepararEdicao();
+
     prisma.produto.findUnique.mockResolvedValue({
-      id: 10,
+      ...produto,
       imagePublicId: 'mel-api/produtos/imagem-antiga',
     });
 
-    prisma.produto.findFirst.mockResolvedValue(null);
-
-    prisma.categoria.findUnique.mockResolvedValue({
-      id: 1,
-      active: true,
-    });
-
-    const produtoAtualizado = {
-      id: 10,
+    prisma.produto.update.mockResolvedValue({
+      ...produto,
       name: 'Mel Atualizado',
-      description: null,
-      price: 40,
-      stockQuantity: 10,
       imageUrl: 'https://res.cloudinary.com/test/image/upload/nova.jpg',
       imagePublicId: 'mel-api/produtos/imagem-nova',
-      active: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      categoryId: 1,
-      category: {
-        id: 1,
-        name: 'Mel',
-      },
-      avaliacoes: [],
-    };
-
-    prisma.produto.update.mockResolvedValue(produtoAtualizado);
+    });
 
     await service.update(10, {
       name: 'Mel Atualizado',
       price: 40,
       stockQuantity: 10,
+      expectedStockQuantity: 10,
       categoryId: 1,
       active: true,
       imageUrl: 'https://res.cloudinary.com/test/image/upload/nova.jpg',
@@ -246,9 +257,7 @@ describe('ProdutosService', () => {
     prisma.produto.findUnique.mockResolvedValue({
       id: 10,
       imagePublicId: 'mel-api/produtos/imagem-antiga',
-      _count: {
-        pedidoItems: 3,
-      },
+      _count: { pedidoItems: 3 },
     });
 
     prisma.produto.update.mockResolvedValue({
@@ -261,16 +270,11 @@ describe('ProdutosService', () => {
     expect(prisma.produto.update).toHaveBeenCalledTimes(1);
 
     expect(prisma.produto.update).toHaveBeenCalledWith({
-      where: {
-        id: 10,
-      },
-      data: {
-        active: false,
-      },
+      where: { id: 10 },
+      data: { active: false },
     });
 
     expect(prisma.produto.delete).not.toHaveBeenCalled();
-
     expect(produtoImageService.cleanupImage).not.toHaveBeenCalled();
   });
 
@@ -278,27 +282,20 @@ describe('ProdutosService', () => {
     prisma.produto.findUnique.mockResolvedValue({
       id: 10,
       imagePublicId: null,
-      _count: {
-        pedidoItems: 0,
-      },
+      _count: { pedidoItems: 0 },
     });
 
-    prisma.produto.delete.mockResolvedValue({
-      id: 10,
-    });
+    prisma.produto.delete.mockResolvedValue({ id: 10 });
 
     await service.delete(10);
 
     expect(prisma.produto.delete).toHaveBeenCalledTimes(1);
 
     expect(prisma.produto.delete).toHaveBeenCalledWith({
-      where: {
-        id: 10,
-      },
+      where: { id: 10 },
     });
 
     expect(prisma.produto.update).not.toHaveBeenCalled();
-
     expect(produtoImageService.cleanupImage).toHaveBeenCalledWith(null);
   });
 
@@ -306,14 +303,10 @@ describe('ProdutosService', () => {
     prisma.produto.findUnique.mockResolvedValue({
       id: 10,
       imagePublicId: 'mel-api/produtos/mel-teste',
-      _count: {
-        pedidoItems: 0,
-      },
+      _count: { pedidoItems: 0 },
     });
 
-    prisma.produto.delete.mockResolvedValue({
-      id: 10,
-    });
+    prisma.produto.delete.mockResolvedValue({ id: 10 });
 
     await service.delete(10);
 
@@ -332,9 +325,7 @@ describe('ProdutosService', () => {
     );
 
     expect(prisma.produto.delete).not.toHaveBeenCalled();
-
     expect(prisma.produto.update).not.toHaveBeenCalled();
-
     expect(produtoImageService.cleanupImage).not.toHaveBeenCalled();
   });
 
@@ -350,13 +341,9 @@ describe('ProdutosService', () => {
     expect(prisma.produto.findMany).toHaveBeenCalledWith({
       where: {
         active: true,
-        category: {
-          active: true,
-        },
+        category: { active: true },
       },
-      orderBy: {
-        id: 'asc',
-      },
+      orderBy: { id: 'asc' },
       include: {
         category: {
           select: {
@@ -365,11 +352,124 @@ describe('ProdutosService', () => {
           },
         },
         avaliacoes: {
-          select: {
-            rating: true,
-          },
+          select: { rating: true },
         },
       },
+    });
+  });
+
+  describe('proteção contra estoque desatualizado', () => {
+    it.each(['update', 'partialUpdate'] as const)(
+      '%s: deve exigir o estoque original ao atualizar a quantidade',
+      async (method) => {
+        prepararEdicao();
+
+        await expect(
+          service[method](10, {
+            name: 'Mel Atualizado',
+            price: 40,
+            stockQuantity: 15,
+            categoryId: 1,
+            active: true,
+          }),
+        ).rejects.toThrow(BadRequestException);
+
+        expect(prisma.produto.update).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['update', 'partialUpdate'] as const)(
+      '%s: deve usar o estoque original na condição de gravação e retornar conflito quando ela falhar',
+      async (method) => {
+        prepararEdicao(9);
+
+        // Simula a resposta do Prisma quando nenhum produto
+        // corresponde ao ID e ao estoque esperado na atualização.
+        prisma.produto.update.mockRejectedValue(
+          new Prisma.PrismaClientKnownRequestError(
+            'Nenhum registro corresponde à condição de atualização.',
+            {
+              code: 'P2025',
+              clientVersion: '6.19.3',
+            },
+          ),
+        );
+
+        await expect(
+          service[method](10, {
+            name: 'Mel Atualizado',
+            price: 40,
+            stockQuantity: 15,
+            expectedStockQuantity: 10,
+            categoryId: 1,
+            active: true,
+          }),
+        ).rejects.toThrow(ConflictException);
+
+        expect(prisma.produto.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: {
+              id: 10,
+              stockQuantity: 10,
+            },
+          }),
+        );
+
+        expect(produtoImageService.cleanupReplacedImage).not.toHaveBeenCalled();
+      },
+    );
+
+    it('deve aceitar estoque original zero e gravar com essa condição', async () => {
+      const produto = prepararEdicao(0);
+
+      prisma.produto.update.mockResolvedValue({
+        ...produto,
+        stockQuantity: 5,
+      });
+
+      const result = await service.update(10, {
+        name: 'Mel Teste',
+        price: 40,
+        stockQuantity: 5,
+        expectedStockQuantity: 0,
+        categoryId: 1,
+        active: true,
+      });
+
+      expect(result.stockQuantity).toBe(5);
+
+      expect(prisma.produto.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: 10,
+            stockQuantity: 0,
+          },
+        }),
+      );
+    });
+
+    it('deve permitir PATCH de descrição sem alterar ou exigir estoque', async () => {
+      prepararEdicao(9);
+
+      await service.partialUpdate(10, {
+        description: 'Nova descrição',
+      });
+
+      expect(prisma.produto.update).toHaveBeenCalledWith({
+        where: { id: 10 },
+        data: { description: 'Nova descrição' },
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          avaliacoes: {
+            select: { rating: true },
+          },
+        },
+      });
     });
   });
 });

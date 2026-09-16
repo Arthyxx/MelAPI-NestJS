@@ -10,6 +10,7 @@ import {
   IsUrl,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class PutProdutoDto {
@@ -32,6 +33,16 @@ export class PutProdutoDto {
   @Min(0)
   stockQuantity!: number;
 
+  @ValidateIf((_object: unknown, value: unknown) => value !== undefined)
+  @Type(() => Number)
+  @IsInt({
+    message: 'O estoque original deve ser um número inteiro.',
+  })
+  @Min(0, {
+    message: 'O estoque original não pode ser negativo.',
+  })
+  expectedStockQuantity?: number;
+
   @IsOptional()
   @IsString()
   @IsUrl()
@@ -47,9 +58,7 @@ export class PutProdutoDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber(
-    {
-      maxDecimalPlaces: 3,
-    },
+    { maxDecimalPlaces: 3 },
     {
       message: 'O peso deve ser um número com no máximo 3 casas decimais.',
     },
@@ -62,9 +71,7 @@ export class PutProdutoDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber(
-    {
-      maxDecimalPlaces: 2,
-    },
+    { maxDecimalPlaces: 2 },
     {
       message: 'A altura deve ser um número com no máximo 2 casas decimais.',
     },
@@ -77,9 +84,7 @@ export class PutProdutoDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber(
-    {
-      maxDecimalPlaces: 2,
-    },
+    { maxDecimalPlaces: 2 },
     {
       message: 'A largura deve ser um número com no máximo 2 casas decimais.',
     },
@@ -92,9 +97,7 @@ export class PutProdutoDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber(
-    {
-      maxDecimalPlaces: 2,
-    },
+    { maxDecimalPlaces: 2 },
     {
       message:
         'O comprimento deve ser um número com no máximo 2 casas decimais.',

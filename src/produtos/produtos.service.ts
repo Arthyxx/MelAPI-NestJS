@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -107,7 +108,6 @@ export class ProdutosService {
           },
         },
       }),
-
       this.prisma.produto.count({
         where,
       }),
@@ -193,7 +193,6 @@ export class ProdutosService {
       const name = dto.name.trim();
 
       await this.ensureNameIsAvailable(name);
-
       await this.ensureCategoriaIsActive(dto.categoryId);
 
       const shippingData = buildProdutoShippingData(dto);
@@ -242,15 +241,12 @@ export class ProdutosService {
       const name = dto.name.trim();
 
       await this.ensureNameIsAvailable(name, id);
-
       await this.ensureCategoriaIsActive(dto.categoryId);
 
       const shippingData = buildProdutoShippingData(dto);
 
       const produto = await this.prisma.produto.update({
-        where: {
-          id,
-        },
+        where: this.buildStockUpdateWhere(id, dto.expectedStockQuantity),
         data: {
           name,
           description: dto.description?.trim() || null,
@@ -285,6 +281,15 @@ export class ProdutosService {
       return toProdutoResponse(produto);
     } catch (error) {
       await this.produtoImageService.cleanupOrphanImage(novoImagePublicId);
+
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new ConflictException(
+          'O produto ou seu estoque foi alterado. Atualize a lista e reabra a edição antes de salvar novamente.',
+        );
+      }
 
       throw error;
     }
@@ -349,9 +354,10 @@ export class ProdutosService {
       }
 
       const produto = await this.prisma.produto.update({
-        where: {
-          id,
-        },
+        where:
+          dto.stockQuantity !== undefined
+            ? this.buildStockUpdateWhere(id, dto.expectedStockQuantity)
+            : { id },
         data,
         include: {
           category: {
@@ -376,6 +382,15 @@ export class ProdutosService {
       return toProdutoResponse(produto);
     } catch (error) {
       await this.produtoImageService.cleanupOrphanImage(candidateImagePublicId);
+
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new ConflictException(
+          'O produto ou seu estoque foi alterado. Atualize a lista e reabra a edição antes de salvar novamente.',
+        );
+      }
 
       throw error;
     }
@@ -427,6 +442,27 @@ export class ProdutosService {
 
       throw error;
     }
+  }
+
+  private buildStockUpdateWhere(
+    id: number,
+    expectedStockQuantity: number | undefined,
+  ): Prisma.ProdutoWhereUniqueInput {
+    if (
+      expectedStockQuantity === undefined ||
+      !Number.isInteger(expectedStockQuantity) ||
+      expectedStockQuantity < 0
+    ) {
+      throw new BadRequestException(
+        'Informe o estoque original para atualizar a quantidade. Atualize a lista e reabra a edição do produto.',
+      );
+    }
+
+    // A comparação faz parte da própria gravação no banco.
+    return {
+      id,
+      stockQuantity: expectedStockQuantity,
+    };
   }
 
   private async ensureProdutoExists(id: number) {
