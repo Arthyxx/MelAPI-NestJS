@@ -1,7 +1,9 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -12,6 +14,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
+
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../common/guards/roles.guard';
@@ -20,6 +23,9 @@ import { CreatePedidoDto } from './dto/create-pedido.dto';
 import { PedidoFilterDto } from './dto/pedido-filter.dto';
 import { UpdateStatusPedidoDto } from './dto/update-status-pedido.dto';
 import { PedidosService } from './pedidos.service';
+
+const IDEMPOTENCY_KEY_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Controller('pedidos')
 export class PedidosController {
@@ -57,8 +63,23 @@ export class PedidosController {
   @UseGuards(JwtAuthGuard)
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@CurrentUser() user: AuthUser, @Body() dto: CreatePedidoDto) {
-    return this.pedidosService.create(user.sub, dto);
+  create(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: CreatePedidoDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    const normalizedIdempotencyKey = idempotencyKey?.trim().toLowerCase();
+
+    if (
+      !normalizedIdempotencyKey ||
+      !IDEMPOTENCY_KEY_REGEX.test(normalizedIdempotencyKey)
+    ) {
+      throw new BadRequestException(
+        'Informe uma chave de idempotência válida no header Idempotency-Key.',
+      );
+    }
+
+    return this.pedidosService.create(user.sub, dto, normalizedIdempotencyKey);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

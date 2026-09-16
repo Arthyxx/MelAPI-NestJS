@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -236,7 +237,27 @@ export class PedidosService {
     return this.toResponse(pedido);
   }
 
-  async create(clienteId: number, dto: CreatePedidoDto) {
+  async create(
+    clienteId: number,
+    dto: CreatePedidoDto,
+    idempotencyKey: string,
+  ) {
+    const pedidoExistente = await this.prisma.pedido.findUnique({
+      where: {
+        clienteId_idempotencyKey: {
+          clienteId,
+          idempotencyKey,
+        },
+      },
+      include: this.defaultInclude(),
+    });
+
+    if (pedidoExistente) {
+      this.assertSameIdempotencyRequest(pedidoExistente, dto);
+
+      return this.toResponse(pedidoExistente);
+    }
+
     const cliente = await this.prisma.cliente.findUnique({
       where: {
         id: clienteId,
@@ -332,82 +353,105 @@ export class PedidosService {
 
     const paymentExpiresAt = new Date(Date.now() + expirationMinutes * 60_000);
 
-    const pedido = await this.prisma.$transaction(async (tx) => {
-      for (const item of itemsData) {
-        const stockUpdate = await tx.produto.updateMany({
-          where: {
-            id: item.produto.id,
-            active: true,
-            stockQuantity: {
-              gte: item.quantity,
+    try {
+      const pedido = await this.prisma.$transaction(async (tx) => {
+        for (const item of itemsData) {
+          const stockUpdate = await tx.produto.updateMany({
+            where: {
+              id: item.produto.id,
+              active: true,
+              stockQuantity: {
+                gte: item.quantity,
+              },
             },
-          },
+            data: {
+              stockQuantity: {
+                decrement: item.quantity,
+              },
+            },
+          });
+
+          if (stockUpdate.count !== 1) {
+            throw new BadRequestException(
+              `O estoque do produto "${item.produto.name}" foi alterado. Verifique a quantidade disponível e tente novamente.`,
+            );
+          }
+        }
+
+        return tx.pedido.create({
           data: {
-            stockQuantity: {
-              decrement: item.quantity,
+            clienteId,
+            idempotencyKey,
+
+            status: StatusPedido.PENDENTE,
+
+            totalPrice,
+
+            shippingPrice,
+
+            paymentExpiresAt,
+
+            shippingServiceId: shippingData.shippingServiceId,
+
+            shippingServiceName: shippingData.shippingServiceName,
+
+            shippingCompanyName: shippingData.shippingCompanyName,
+
+            shippingDeliveryTime: shippingData.shippingDeliveryTime,
+
+            shippingZipCode: shippingData.shippingZipCode,
+
+            shippingStreet: shippingData.shippingStreet,
+
+            shippingAddressNumber: shippingData.shippingAddressNumber,
+
+            shippingComplement: shippingData.shippingComplement,
+
+            shippingNeighborhood: shippingData.shippingNeighborhood,
+
+            shippingCity: shippingData.shippingCity,
+
+            shippingState: shippingData.shippingState,
+
+            items: {
+              create: itemsData.map((item) => ({
+                produtoId: item.produto.id,
+
+                quantity: item.quantity,
+
+                unitPrice: item.unitPrice,
+
+                subtotal: item.subtotal,
+              })),
             },
           },
+
+          include: this.defaultInclude(),
+        });
+      });
+
+      return this.toResponse(pedido);
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        const pedidoVencedor = await this.prisma.pedido.findUnique({
+          where: {
+            clienteId_idempotencyKey: {
+              clienteId,
+              idempotencyKey,
+            },
+          },
+          include: this.defaultInclude(),
         });
 
-        if (stockUpdate.count !== 1) {
-          throw new BadRequestException(
-            `O estoque do produto "${item.produto.name}" foi alterado. Verifique a quantidade disponível e tente novamente.`,
-          );
+        if (pedidoVencedor) {
+          this.assertSameIdempotencyRequest(pedidoVencedor, dto);
+
+          return this.toResponse(pedidoVencedor);
         }
       }
 
-      return tx.pedido.create({
-        data: {
-          clienteId,
-
-          status: StatusPedido.PENDENTE,
-
-          totalPrice,
-
-          shippingPrice,
-
-          paymentExpiresAt,
-
-          shippingServiceId: shippingData.shippingServiceId,
-
-          shippingServiceName: shippingData.shippingServiceName,
-
-          shippingCompanyName: shippingData.shippingCompanyName,
-
-          shippingDeliveryTime: shippingData.shippingDeliveryTime,
-
-          shippingZipCode: shippingData.shippingZipCode,
-
-          shippingStreet: shippingData.shippingStreet,
-
-          shippingAddressNumber: shippingData.shippingAddressNumber,
-
-          shippingComplement: shippingData.shippingComplement,
-
-          shippingNeighborhood: shippingData.shippingNeighborhood,
-
-          shippingCity: shippingData.shippingCity,
-
-          shippingState: shippingData.shippingState,
-
-          items: {
-            create: itemsData.map((item) => ({
-              produtoId: item.produto.id,
-
-              quantity: item.quantity,
-
-              unitPrice: item.unitPrice,
-
-              subtotal: item.subtotal,
-            })),
-          },
-        },
-
-        include: this.defaultInclude(),
-      });
-    });
-
-    return this.toResponse(pedido);
+      throw error;
+    }
   }
 
   async updateStatus(id: number, dto: UpdateStatusPedidoDto) {
@@ -622,6 +666,61 @@ export class PedidosService {
 
       return true;
     });
+  }
+
+  private assertSameIdempotencyRequest(
+    pedido: {
+      shippingServiceId: string | null;
+      shippingPrice: Prisma.Decimal;
+      shippingZipCode: string | null;
+      items: Array<{
+        produtoId: number;
+        quantity: number;
+      }>;
+    },
+    dto: CreatePedidoDto,
+  ) {
+    const requestedZipCode = dto.quotedZipCode?.replace(/\D/g, '') ?? null;
+
+    const sameShippingService =
+      pedido.shippingServiceId === (dto.shippingServiceId ?? null);
+
+    const sameShippingPrice =
+      dto.quotedShippingPrice !== null &&
+      dto.quotedShippingPrice !== undefined &&
+      pedido.shippingPrice.equals(new Prisma.Decimal(dto.quotedShippingPrice));
+
+    const sameZipCode = pedido.shippingZipCode === requestedZipCode;
+
+    const sameItems =
+      pedido.items.length === dto.items.length &&
+      dto.items.every((requestedItem) =>
+        pedido.items.some(
+          (savedItem) =>
+            savedItem.produtoId === requestedItem.produtoId &&
+            savedItem.quantity === requestedItem.quantity,
+        ),
+      );
+
+    if (
+      !sameShippingService ||
+      !sameShippingPrice ||
+      !sameZipCode ||
+      !sameItems
+    ) {
+      throw new ConflictException(
+        'Esta chave de idempotência já foi usada com dados diferentes.',
+      );
+    }
+  }
+
+  private isUniqueConstraintError(error: unknown) {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'P2002'
+    );
   }
 
   private async restoreStock(

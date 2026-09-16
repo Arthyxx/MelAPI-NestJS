@@ -12,6 +12,12 @@ describe('CreatePedidoDto', () => {
     return validate(dto);
   }
 
+  const validShippingData = {
+    shippingServiceId: '1',
+    quotedShippingPrice: 12.5,
+    quotedZipCode: '60421410',
+  };
+
   it('deve aceitar um pedido válido', async () => {
     const errors = await validateDto({
       items: [
@@ -20,7 +26,7 @@ describe('CreatePedidoDto', () => {
           quantity: 2,
         },
       ],
-      shippingServiceId: '1',
+      ...validShippingData,
     });
 
     expect(errors).toHaveLength(0);
@@ -29,7 +35,7 @@ describe('CreatePedidoDto', () => {
   it('deve rejeitar pedido sem itens', async () => {
     const errors = await validateDto({
       items: [],
-      shippingServiceId: '1',
+      ...validShippingData,
     });
 
     expect(errors).not.toHaveLength(0);
@@ -52,7 +58,7 @@ describe('CreatePedidoDto', () => {
 
     const errors = await validateDto({
       items,
-      shippingServiceId: '1',
+      ...validShippingData,
     });
 
     const itemsError = errors.find((error) => error.property === 'items');
@@ -68,7 +74,7 @@ describe('CreatePedidoDto', () => {
           quantity: 1,
         },
       ],
-      shippingServiceId: '1',
+      ...validShippingData,
     });
 
     const itemsError = errors.find((error) => error.property === 'items');
@@ -86,7 +92,7 @@ describe('CreatePedidoDto', () => {
           quantity: 0,
         },
       ],
-      shippingServiceId: '1',
+      ...validShippingData,
     });
 
     const itemsError = errors.find((error) => error.property === 'items');
@@ -104,7 +110,7 @@ describe('CreatePedidoDto', () => {
           quantity: 101,
         },
       ],
-      shippingServiceId: '1',
+      ...validShippingData,
     });
 
     const itemsError = errors.find((error) => error.property === 'items');
@@ -122,6 +128,7 @@ describe('CreatePedidoDto', () => {
           quantity: 1,
         },
       ],
+      ...validShippingData,
       shippingServiceId: '',
     });
 
