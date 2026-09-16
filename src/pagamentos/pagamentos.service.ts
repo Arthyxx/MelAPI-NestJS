@@ -15,6 +15,8 @@ import {
   MercadoPagoService,
 } from './mercado-pago.service';
 
+const CHECKOUT_CREATION_STALE_MS = 2 * 60_000;
+
 @Injectable()
 export class PagamentosService {
   private readonly logger = new Logger(PagamentosService.name);
@@ -89,7 +91,9 @@ export class PagamentosService {
       return checkoutPronto;
     }
 
-    await this.reservarCriacaoCheckout(pedido.id);
+    const checkoutReservationToken = await this.reservarCriacaoCheckout(
+      pedido.id,
+    );
 
     const items: MercadoPagoPreferenceInput['items'] = pedido.items.map(
       (item) => ({
@@ -125,16 +129,31 @@ export class PagamentosService {
       });
 
       await this.prisma.$transaction(async (tx) => {
-        await tx.checkoutPedido.update({
-          where: {
-            pedidoId: pedido.id,
-          },
-          data: {
-            status: StatusCheckoutPedido.PRONTO,
-            preferenceId: preference.preferenceId,
-            checkoutUrl: preference.checkoutUrl,
-          },
-        });
+        try {
+          await tx.checkoutPedido.update({
+            where: {
+              pedidoId: pedido.id,
+              status: StatusCheckoutPedido.CRIANDO,
+              updatedAt: checkoutReservationToken,
+            },
+            data: {
+              status: StatusCheckoutPedido.PRONTO,
+              preferenceId: preference.preferenceId,
+              checkoutUrl: preference.checkoutUrl,
+            },
+          });
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2025'
+          ) {
+            throw new ConflictException(
+              'A criação do checkout foi assumida por outra tentativa. Tente novamente.',
+            );
+          }
+
+          throw error;
+        }
 
         const pagamentoExistente = await tx.pagamento.findUnique({
           where: {
@@ -160,7 +179,7 @@ export class PagamentosService {
         checkoutUrl: preference.checkoutUrl,
       };
     } catch (error) {
-      await this.marcarCheckoutComoFalhou(pedido.id);
+      await this.marcarCheckoutComoFalhou(pedido.id, checkoutReservationToken);
 
       throw error;
     }
@@ -638,16 +657,47 @@ export class PagamentosService {
     };
   }
 
-  private async reservarCriacaoCheckout(pedidoId: number) {
+  private async reservarCriacaoCheckout(pedidoId: number): Promise<Date> {
     const checkoutExistente = await this.prisma.checkoutPedido.findUnique({
       where: {
         pedidoId,
       },
     });
 
+    const reservationToken = new Date();
+
     if (checkoutExistente?.status === StatusCheckoutPedido.CRIANDO) {
+      const staleBefore = new Date(Date.now() - CHECKOUT_CREATION_STALE_MS);
+
+      if (checkoutExistente.updatedAt > staleBefore) {
+        throw new ConflictException(
+          'O checkout deste pedido já está sendo criado. Tente novamente em instantes.',
+        );
+      }
+
+      const update = await this.prisma.checkoutPedido.updateMany({
+        where: {
+          pedidoId,
+          status: StatusCheckoutPedido.CRIANDO,
+          updatedAt: checkoutExistente.updatedAt,
+        },
+        data: {
+          preferenceId: null,
+          checkoutUrl: null,
+          updatedAt: reservationToken,
+        },
+      });
+
+      if (update.count === 1) {
+        this.logger.warn(
+          `Checkout CRIANDO antigo do pedido ${pedidoId} foi recuperado para uma nova tentativa.`,
+        );
+
+        return reservationToken;
+      }
+
       throw new ConflictException(
-        'O checkout deste pedido já está sendo criado. Tente novamente em instantes.',
+        'O checkout deste pedido está sendo atualizado por outra operação.',
       );
     }
 
@@ -667,11 +717,12 @@ export class PagamentosService {
           status: StatusCheckoutPedido.CRIANDO,
           preferenceId: null,
           checkoutUrl: null,
+          updatedAt: reservationToken,
         },
       });
 
       if (update.count === 1) {
-        return;
+        return reservationToken;
       }
 
       throw new ConflictException(
@@ -685,8 +736,11 @@ export class PagamentosService {
           pedidoId,
           provider: 'MERCADO_PAGO',
           status: StatusCheckoutPedido.CRIANDO,
+          updatedAt: reservationToken,
         },
       });
+
+      return reservationToken;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -709,12 +763,16 @@ export class PagamentosService {
     }
   }
 
-  private async marcarCheckoutComoFalhou(pedidoId: number) {
+  private async marcarCheckoutComoFalhou(
+    pedidoId: number,
+    reservationToken: Date,
+  ) {
     try {
       await this.prisma.checkoutPedido.updateMany({
         where: {
           pedidoId,
           status: StatusCheckoutPedido.CRIANDO,
+          updatedAt: reservationToken,
         },
         data: {
           status: StatusCheckoutPedido.FALHOU,
