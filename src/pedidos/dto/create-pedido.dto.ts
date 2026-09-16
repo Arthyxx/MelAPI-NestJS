@@ -5,7 +5,9 @@ import {
   IsArray,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsString,
+  Matches,
   Max,
   Min,
   ValidateNested,
@@ -37,4 +39,26 @@ export class CreatePedidoDto {
     message: 'Selecione uma opção de frete.',
   })
   shippingServiceId!: string;
+
+  @Type(() => Number)
+  @IsNumber(
+    {
+      allowNaN: false,
+      allowInfinity: false,
+      maxDecimalPlaces: 2,
+    },
+    {
+      message: 'O valor cotado do frete é inválido.',
+    },
+  )
+  @Min(0, {
+    message: 'O valor cotado do frete é inválido.',
+  })
+  quotedShippingPrice!: number;
+
+  @IsString()
+  @Matches(/^\d{5}-?\d{3}$/, {
+    message: 'O CEP usado na cotação do frete é inválido.',
+  })
+  quotedZipCode!: string;
 }

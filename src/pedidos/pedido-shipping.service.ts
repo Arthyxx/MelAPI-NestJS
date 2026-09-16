@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 
 import { FreteService } from '../frete/frete.service';
+
 import type { CreatePedidoDto } from './dto/create-pedido.dto';
 
 interface ClienteShippingData {
@@ -20,10 +21,22 @@ export class PedidoShippingService {
   async prepararFrete(cliente: ClienteShippingData, dto: CreatePedidoDto) {
     this.validateAddress(cliente);
 
+    const currentZipCode = this.normalizeZipCode(cliente.zipCode!);
+
+    const quotedZipCode = this.normalizeZipCode(dto.quotedZipCode);
+
+    if (currentZipCode !== quotedZipCode) {
+      throw new BadRequestException(
+        'Os dados do frete foram atualizados. Calcule o frete novamente.',
+      );
+    }
+
     const shippingOptions = await this.freteService.calcularFrete({
       destinationZipCode: cliente.zipCode!,
+
       items: dto.items.map((item) => ({
         productId: item.produtoId,
+
         quantity: item.quantity,
       })),
     });
@@ -38,6 +51,15 @@ export class PedidoShippingService {
       );
     }
 
+    if (
+      this.toCents(selectedOption.price) !==
+      this.toCents(dto.quotedShippingPrice)
+    ) {
+      throw new BadRequestException(
+        'Os dados do frete foram atualizados. Calcule o frete novamente.',
+      );
+    }
+
     return {
       shippingPrice: selectedOption.price,
 
@@ -49,7 +71,7 @@ export class PedidoShippingService {
 
       shippingDeliveryTime: selectedOption.deliveryTime,
 
-      shippingZipCode: this.normalizeZipCode(cliente.zipCode!),
+      shippingZipCode: currentZipCode,
 
       shippingStreet: cliente.street!,
 
@@ -82,5 +104,9 @@ export class PedidoShippingService {
 
   private normalizeZipCode(zipCode: string) {
     return zipCode.replace(/\D/g, '');
+  }
+
+  private toCents(value: number) {
+    return Math.round((value + Number.EPSILON) * 100);
   }
 }
