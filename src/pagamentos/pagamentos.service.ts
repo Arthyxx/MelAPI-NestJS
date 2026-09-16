@@ -178,7 +178,9 @@ export class PagamentosService {
         pagamentos: {
           where: {
             provider: 'MERCADO_PAGO',
-            status: 'approved',
+            status: {
+              in: ['approved', 'refunded'],
+            },
             paymentId: {
               not: null,
             },
@@ -234,6 +236,7 @@ export class PagamentosService {
       pagamento.refundId &&
       pagamento.refundAmount !== null
     ) {
+      await this.pedidosService.iniciarCancelamentoComReembolso(pedido.id);
       await this.pedidosService.finalizarCancelamentoReembolsado(pedido.id);
 
       return {
@@ -435,12 +438,117 @@ export class PagamentosService {
       }
     }
 
+    if (payment.status === 'refunded') {
+      await this.reconciliarPagamentoReembolsado(
+        pagamentoId,
+        pedido.id,
+        pedido.totalPrice,
+        payment.paymentId,
+      );
+    }
+
     return {
       received: true,
       pedidoId: pedido.id,
       paymentId: payment.paymentId,
       paymentStatus: payment.status,
     };
+  }
+
+  private async reconciliarPagamentoReembolsado(
+    pagamentoId: number,
+    pedidoId: number,
+    totalPrice: Prisma.Decimal,
+    paymentId: string,
+  ) {
+    const refunds = await this.mercadoPagoService.listarReembolsos(paymentId);
+
+    const approvedRefunds = refunds.filter(
+      (refund) => refund.status === 'approved',
+    );
+
+    if (approvedRefunds.length !== 1) {
+      this.logger.error(
+        `Pagamento ${paymentId} está reembolsado, mas foram encontrados ${approvedRefunds.length} reembolsos aprovados.`,
+      );
+
+      throw new ServiceUnavailableException(
+        'Não foi possível confirmar o reembolso total do pagamento.',
+      );
+    }
+
+    const refund = approvedRefunds[0];
+
+    if (!refund) {
+      throw new ServiceUnavailableException(
+        'Não foi possível confirmar o reembolso total do pagamento.',
+      );
+    }
+
+    const refundAmount = new Prisma.Decimal(refund.amount);
+
+    if (!refundAmount.equals(totalPrice)) {
+      this.logger.error(
+        `Reembolso ${refund.refundId} possui valor ${refundAmount.toString()}, mas o pedido ${pedidoId} possui total ${totalPrice.toString()}.`,
+      );
+
+      throw new ServiceUnavailableException(
+        'O valor reembolsado não corresponde ao valor total do pedido.',
+      );
+    }
+
+    await this.prisma.pagamento.update({
+      where: {
+        id: pagamentoId,
+      },
+      data: {
+        refundId: refund.refundId,
+        refundStatus: refund.status,
+        refundAmount,
+        refundedAt: refund.createdAt ?? new Date(),
+      },
+    });
+
+    const pedidoAtual = await this.prisma.pedido.findUnique({
+      where: {
+        id: pedidoId,
+      },
+      select: {
+        status: true,
+      },
+    });
+
+    if (!pedidoAtual) {
+      throw new NotFoundException(
+        'Pedido associado ao pagamento não encontrado após a confirmação do reembolso.',
+      );
+    }
+
+    if (pedidoAtual.status === StatusPedido.CANCELADO) {
+      return;
+    }
+
+    if (pedidoAtual.status === StatusPedido.CANCELAMENTO_PENDENTE) {
+      await this.pedidosService.finalizarCancelamentoReembolsado(pedidoId);
+      return;
+    }
+
+    if (
+      pedidoAtual.status !== StatusPedido.PAGO &&
+      pedidoAtual.status !== StatusPedido.CONFIRMADO &&
+      pedidoAtual.status !== StatusPedido.PREPARANDO
+    ) {
+      this.logger.error(
+        `Pagamento ${paymentId} do pedido ${pedidoId} foi reembolsado enquanto o pedido estava em ${pedidoAtual.status}.`,
+      );
+
+      throw new ConflictException(
+        'O pagamento foi reembolsado, mas o status atual do pedido exige conciliação manual.',
+      );
+    }
+
+    await this.pedidosService.iniciarCancelamentoComReembolso(pedidoId);
+    await this.pedidosService.finalizarCancelamentoReembolsado(pedidoId);
   }
 
   private async reembolsarPagamentoAprovadoDePedidoCancelado(

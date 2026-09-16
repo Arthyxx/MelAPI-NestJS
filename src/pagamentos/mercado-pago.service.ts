@@ -311,6 +311,107 @@ export class MercadoPagoService {
     }
   }
 
+  async listarReembolsos(
+    paymentId: string,
+  ): Promise<MercadoPagoRefundResult[]> {
+    const accessToken = this.getAccessToken();
+
+    const baseUrl = this.configService.getOrThrow<string>(
+      'MERCADO_PAGO_BASE_URL',
+    );
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<MercadoPagoRefundResponse[]>(
+          `${baseUrl}/v1/payments/${encodeURIComponent(paymentId)}/refunds`,
+          {
+            headers: this.buildHeaders(accessToken),
+            timeout: this.requestTimeoutMs,
+          },
+        ),
+      );
+
+      if (!Array.isArray(response.data)) {
+        this.logger.error(
+          `Resposta inválida ao consultar reembolsos do pagamento ${paymentId} no Mercado Pago.`,
+        );
+
+        throw new ServiceUnavailableException(
+          'Não foi possível validar os reembolsos do pagamento.',
+        );
+      }
+
+      return response.data.map((refund) => {
+        if (
+          refund.id === undefined ||
+          refund.payment_id === undefined ||
+          typeof refund.amount !== 'number' ||
+          !refund.status
+        ) {
+          this.logger.error(
+            `Resposta inválida ao consultar reembolsos do pagamento ${paymentId} no Mercado Pago.`,
+          );
+
+          throw new ServiceUnavailableException(
+            'Não foi possível validar os reembolsos do pagamento.',
+          );
+        }
+
+        const refundPaymentId = String(refund.payment_id);
+
+        if (refundPaymentId !== paymentId) {
+          this.logger.error(
+            `Reembolso ${String(
+              refund.id,
+            )} não corresponde ao pagamento ${paymentId}.`,
+          );
+
+          throw new ServiceUnavailableException(
+            'Não foi possível validar os reembolsos do pagamento.',
+          );
+        }
+
+        const createdAt = refund.date_created
+          ? new Date(refund.date_created)
+          : null;
+
+        return {
+          refundId: String(refund.id),
+
+          paymentId: refundPaymentId,
+
+          amount: refund.amount,
+
+          status: refund.status,
+
+          createdAt:
+            createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : null,
+        };
+      });
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) {
+        throw error;
+      }
+
+      if (isAxiosError(error)) {
+        this.logger.error(
+          `Erro ao consultar reembolsos do pagamento ${paymentId} no Mercado Pago. Status: ${
+            error.response?.status ?? 'desconhecido'
+          }.`,
+        );
+      } else {
+        this.logUnexpectedError(
+          `Erro ao consultar reembolsos do pagamento ${paymentId} no Mercado Pago.`,
+          error,
+        );
+      }
+
+      throw new ServiceUnavailableException(
+        'Não foi possível validar os reembolsos do pagamento no Mercado Pago.',
+      );
+    }
+  }
+
   async reembolsarPagamento(
     paymentId: string,
   ): Promise<MercadoPagoRefundResult> {
