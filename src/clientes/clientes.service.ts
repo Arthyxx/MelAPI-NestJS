@@ -3,7 +3,6 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -210,7 +209,7 @@ export class ClientesService {
     );
 
     if (!currentPasswordMatches) {
-      throw new UnauthorizedException('Senha atual inválida.');
+      throw new BadRequestException('Senha atual inválida.');
     }
 
     const newPasswordMatchesCurrent = await bcrypt.compare(

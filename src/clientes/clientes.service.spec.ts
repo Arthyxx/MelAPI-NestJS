@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Role } from '@prisma/client';
@@ -59,7 +58,7 @@ describe('ClientesService', () => {
   };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -123,7 +122,6 @@ describe('ClientesService', () => {
       id: 2,
       role: Role.ADMIN,
       active: true,
-
       _count: {
         pedidos: 0,
       },
@@ -158,7 +156,6 @@ describe('ClientesService', () => {
         id: {
           not: 7,
         },
-
         role: Role.ADMIN,
         active: true,
       },
@@ -193,7 +190,6 @@ describe('ClientesService', () => {
     );
 
     expect(prismaMock.cliente.update).toHaveBeenCalled();
-
     expect(result.active).toBe(false);
   });
 
@@ -221,7 +217,6 @@ describe('ClientesService', () => {
       where: {
         id: 10,
       },
-
       select: {
         id: true,
         password: true,
@@ -237,7 +232,6 @@ describe('ClientesService', () => {
     });
 
     expect(updateData.data.password).toBeDefined();
-
     expect(updateData.data.password).not.toBe(newPassword);
 
     expect(updateData.data.tokenVersion).toEqual({
@@ -259,7 +253,7 @@ describe('ClientesService', () => {
     });
   });
 
-  it('não deve alterar a senha quando a senha atual estiver incorreta', async () => {
+  it('deve retornar erro 400 sem alterar senha ou tokenVersion quando a senha atual estiver incorreta', async () => {
     const currentPasswordHash = await bcrypt.hash('senhaCorreta123', 10);
 
     prismaMock.cliente.findUnique.mockResolvedValue({
@@ -267,12 +261,20 @@ describe('ClientesService', () => {
       password: currentPasswordHash,
     });
 
-    await expect(
-      service.changePassword(10, {
-        currentPassword: 'senhaErrada123',
-        newPassword: 'novaSenha456',
-      }),
-    ).rejects.toThrow(UnauthorizedException);
+    const result = service.changePassword(10, {
+      currentPassword: 'senhaErrada123',
+      newPassword: 'novaSenha456',
+    });
+
+    await expect(result).rejects.toBeInstanceOf(BadRequestException);
+
+    await expect(result).rejects.toMatchObject({
+      message: 'Senha atual inválida.',
+      response: {
+        statusCode: 400,
+        message: 'Senha atual inválida.',
+      },
+    });
 
     expect(prismaMock.cliente.update).not.toHaveBeenCalled();
   });
