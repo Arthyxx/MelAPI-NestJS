@@ -7,6 +7,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
 import { CategoriasModule } from './categorias/categorias.module';
+import { CepModule } from './cep/cep.module';
 import { ClientesModule } from './clientes/clientes.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { validateEnvironment } from './config/env.validation';
@@ -44,6 +45,7 @@ import { ProdutosModule } from './produtos/produtos.module';
     DashboardModule,
     FreteModule,
     PagamentosModule,
+    CepModule,
   ],
 
   providers: [
