@@ -1,10 +1,10 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma, StatusCheckoutPedido, StatusPedido } from '@prisma/client';
 
-import { PedidosService } from '../pedidos/pedidos.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { MercadoPagoService } from './mercado-pago.service';
-import { PagamentosService } from './pagamentos.service';
+import { PedidosService } from '../../pedidos/pedidos.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { MercadoPagoService } from '../mercado-pago.service';
+import { PagamentosService } from '../pagamentos.service';
 
 describe('PagamentosService - recuperação de checkout', () => {
   let service: PagamentosService;

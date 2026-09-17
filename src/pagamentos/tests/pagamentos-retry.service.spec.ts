@@ -1,9 +1,9 @@
 import { Prisma, StatusPedido } from '@prisma/client';
 
-import { PedidosService } from '../pedidos/pedidos.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { MercadoPagoService } from './mercado-pago.service';
-import { PagamentosService } from './pagamentos.service';
+import { PedidosService } from '../../pedidos/pedidos.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { MercadoPagoService } from '../mercado-pago.service';
+import { PagamentosService } from '../pagamentos.service';
 
 describe('PagamentosService — nova tentativa de pagamento', () => {
   it('deve reconhecer uma nova tentativa aprovada sem sobrescrever a recusada', async () => {

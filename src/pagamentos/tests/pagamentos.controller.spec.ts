@@ -1,9 +1,9 @@
 import { Role } from '@prisma/client';
 
-import type { AuthUser } from '../common/types/auth-user.type';
-import { MercadoPagoWebhookService } from './mercado-pago-webhook.service';
-import { PagamentosController } from './pagamentos.controller';
-import { PagamentosService } from './pagamentos.service';
+import type { AuthUser } from '../../common/types/auth-user.type';
+import { MercadoPagoWebhookService } from '../mercado-pago-webhook.service';
+import { PagamentosController } from '../pagamentos.controller';
+import { PagamentosService } from '../pagamentos.service';
 
 describe('PagamentosController', () => {
   let controller: PagamentosController;

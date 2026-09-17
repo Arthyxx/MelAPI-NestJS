@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import type { AxiosResponse } from 'axios';
 import { of, throwError } from 'rxjs';
 
-import { MercadoPagoService } from './mercado-pago.service';
+import { MercadoPagoService } from '../mercado-pago.service';
 
 interface HttpRequestOptions {
   headers: Record<string, string>;

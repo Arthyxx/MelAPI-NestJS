@@ -1,10 +1,10 @@
 import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma, StatusPedido } from '@prisma/client';
 
-import { PedidosService } from '../pedidos/pedidos.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { MercadoPagoService } from './mercado-pago.service';
-import { PagamentosService } from './pagamentos.service';
+import { PedidosService } from '../../pedidos/pedidos.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { MercadoPagoService } from '../mercado-pago.service';
+import { PagamentosService } from '../pagamentos.service';
 
 describe('PagamentosService - logs seguros', () => {
   let service: PagamentosService;
