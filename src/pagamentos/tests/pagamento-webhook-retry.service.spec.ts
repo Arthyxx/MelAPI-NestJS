@@ -3,7 +3,8 @@ import { Prisma, StatusPedido } from '@prisma/client';
 import { PedidosService } from '../../pedidos/pedidos.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MercadoPagoService } from '../mercado-pago.service';
-import { PagamentosService } from '../pagamentos.service';
+import { PagamentoWebhookService } from '../services/pagamento-webhook.service';
+import { ReembolsoWebhookService } from '../services/reembolso-webhook.service';
 
 describe('PagamentosService — nova tentativa de pagamento', () => {
   it('deve reconhecer uma nova tentativa aprovada sem sobrescrever a recusada', async () => {
@@ -84,10 +85,19 @@ describe('PagamentosService — nova tentativa de pagamento', () => {
       reembolsarPagamento: jest.fn(),
     };
 
-    const service = new PagamentosService(
+    const pedidosService = {} as PedidosService;
+
+    const reembolsoWebhookService = new ReembolsoWebhookService(
       prisma as unknown as PrismaService,
       mercadoPagoService as unknown as MercadoPagoService,
-      {} as PedidosService,
+      pedidosService,
+    );
+
+    const service = new PagamentoWebhookService(
+      prisma as unknown as PrismaService,
+      mercadoPagoService as unknown as MercadoPagoService,
+      pedidosService,
+      reembolsoWebhookService,
     );
 
     await expect(

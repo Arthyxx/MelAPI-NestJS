@@ -3,10 +3,11 @@ import { Prisma, StatusPedido } from '@prisma/client';
 import { PedidosService } from '../../pedidos/pedidos.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MercadoPagoService } from '../mercado-pago.service';
-import { PagamentosService } from '../pagamentos.service';
+import { PagamentoWebhookService } from '../services/pagamento-webhook.service';
+import { ReembolsoWebhookService } from '../services/reembolso-webhook.service';
 
-describe('PagamentosService - webhook de reembolso', () => {
-  let service: PagamentosService;
+describe('PagamentoWebhookService - webhook de reembolso', () => {
+  let service: PagamentoWebhookService;
 
   const mercadoPagoService = {
     buscarPagamento: jest.fn(),
@@ -51,10 +52,17 @@ describe('PagamentosService - webhook de reembolso', () => {
       $transaction: jest.fn(),
     };
 
-    service = new PagamentosService(
+    const reembolsoWebhookService = new ReembolsoWebhookService(
       prisma as unknown as PrismaService,
       mercadoPagoService as unknown as MercadoPagoService,
       pedidosService as unknown as PedidosService,
+    );
+
+    service = new PagamentoWebhookService(
+      prisma as unknown as PrismaService,
+      mercadoPagoService as unknown as MercadoPagoService,
+      pedidosService as unknown as PedidosService,
+      reembolsoWebhookService,
     );
   });
 

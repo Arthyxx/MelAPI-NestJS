@@ -4,10 +4,10 @@ import { Prisma, StatusPedido } from '@prisma/client';
 import { PedidosService } from '../../pedidos/pedidos.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MercadoPagoService } from '../mercado-pago.service';
-import { PagamentosService } from '../pagamentos.service';
+import { CheckoutService } from '../services/checkout.service';
 
-describe('PagamentosService - logs seguros', () => {
-  let service: PagamentosService;
+describe('CheckoutService - logs seguros', () => {
+  let service: CheckoutService;
   let loggerErrorSpy: jest.SpyInstance;
 
   const prisma = {
@@ -35,7 +35,7 @@ describe('PagamentosService - logs seguros', () => {
 
     loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
 
-    service = new PagamentosService(
+    service = new CheckoutService(
       prisma as unknown as PrismaService,
       mercadoPagoService as unknown as MercadoPagoService,
       pedidosService as unknown as PedidosService,

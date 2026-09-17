@@ -4,10 +4,10 @@ import { Prisma, StatusCheckoutPedido, StatusPedido } from '@prisma/client';
 import { PedidosService } from '../../pedidos/pedidos.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MercadoPagoService } from '../mercado-pago.service';
-import { PagamentosService } from '../pagamentos.service';
+import { CheckoutService } from '../services/checkout.service';
 
 describe('PagamentosService - recuperação de checkout', () => {
-  let service: PagamentosService;
+  let service: CheckoutService;
 
   const mercadoPagoService = {
     criarPreferencia: jest.fn(),
@@ -90,7 +90,7 @@ describe('PagamentosService - recuperação de checkout', () => {
       $transaction: jest.fn(),
     };
 
-    service = new PagamentosService(
+    service = new CheckoutService(
       prisma as unknown as PrismaService,
       mercadoPagoService as unknown as MercadoPagoService,
       pedidosService as unknown as PedidosService,

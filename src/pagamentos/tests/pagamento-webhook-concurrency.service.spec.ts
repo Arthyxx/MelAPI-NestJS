@@ -3,10 +3,11 @@ import { Prisma, StatusPedido } from '@prisma/client';
 import { PedidosService } from '../../pedidos/pedidos.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MercadoPagoService } from '../mercado-pago.service';
-import { PagamentosService } from '../pagamentos.service';
+import { PagamentoWebhookService } from '../services/pagamento-webhook.service';
+import { ReembolsoWebhookService } from '../services/reembolso-webhook.service';
 
 describe('PagamentosService - concorrência de pagamentos', () => {
-  let service: PagamentosService;
+  let service: PagamentoWebhookService;
 
   const prisma = {
     pedido: {
@@ -38,10 +39,17 @@ describe('PagamentosService - concorrência de pagamentos', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    service = new PagamentosService(
+    const reembolsoWebhookService = new ReembolsoWebhookService(
       prisma as unknown as PrismaService,
       mercadoPagoService as unknown as MercadoPagoService,
       pedidosService as unknown as PedidosService,
+    );
+
+    service = new PagamentoWebhookService(
+      prisma as unknown as PrismaService,
+      mercadoPagoService as unknown as MercadoPagoService,
+      pedidosService as unknown as PedidosService,
+      reembolsoWebhookService,
     );
   });
 
