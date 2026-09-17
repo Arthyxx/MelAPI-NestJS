@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Role, StatusPedido } from '@prisma/client';
+
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -75,7 +76,13 @@ export class DashboardService {
       this.prisma.pedido.aggregate({
         where: {
           status: {
-            notIn: [StatusPedido.PENDENTE, StatusPedido.CANCELADO],
+            in: [
+              StatusPedido.PAGO,
+              StatusPedido.CONFIRMADO,
+              StatusPedido.PREPARANDO,
+              StatusPedido.ENVIADO,
+              StatusPedido.ENTREGUE,
+            ],
           },
         },
         _sum: {

@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { StatusPedido } from '@prisma/client';
 
-import { DashboardService } from './dashboard.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DashboardService } from './dashboard.service';
 
 describe('DashboardService', () => {
   let service: DashboardService;
@@ -62,9 +63,7 @@ describe('DashboardService', () => {
 
     prismaMock.pedido.aggregate.mockResolvedValue({
       _sum: {
-        total: 325.9,
         totalPrice: 325.9,
-        valorTotal: 325.9,
       },
     });
 
@@ -95,6 +94,45 @@ describe('DashboardService', () => {
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
   });
 
+  it('deve considerar no faturamento apenas pedidos pagos e não cancelados', async () => {
+    prismaMock.cliente.count.mockResolvedValue(0);
+
+    prismaMock.categoria.count.mockResolvedValue(0);
+
+    prismaMock.produto.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
+
+    prismaMock.pedido.count
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    prismaMock.pedido.aggregate.mockResolvedValue({
+      _sum: {
+        totalPrice: 0,
+      },
+    });
+
+    await service.getSummary();
+
+    expect(prismaMock.pedido.aggregate).toHaveBeenCalledWith({
+      where: {
+        status: {
+          in: [
+            StatusPedido.PAGO,
+            StatusPedido.CONFIRMADO,
+            StatusPedido.PREPARANDO,
+            StatusPedido.ENVIADO,
+            StatusPedido.ENTREGUE,
+          ],
+        },
+      },
+      _sum: {
+        totalPrice: true,
+      },
+    });
+  });
+
   it('deve retornar faturamento zero quando não houver vendas', async () => {
     prismaMock.cliente.count.mockResolvedValue(0);
 
@@ -110,9 +148,7 @@ describe('DashboardService', () => {
 
     prismaMock.pedido.aggregate.mockResolvedValue({
       _sum: {
-        total: null,
         totalPrice: null,
-        valorTotal: null,
       },
     });
 
