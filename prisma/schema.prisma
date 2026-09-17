@@ -107,6 +107,7 @@ model Pedido {
   status StatusPedido @default(PENDENTE)
 
   idempotencyKey String? @db.VarChar(100)
+  paidPaymentId  String? @unique @db.VarChar(120)
 
   totalPrice    Decimal @db.Decimal(10, 2)
   shippingPrice Decimal @default(0) @db.Decimal(10, 2)

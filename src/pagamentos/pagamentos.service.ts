@@ -334,6 +334,7 @@ export class PagamentosService {
         id: true,
         status: true,
         totalPrice: true,
+        paidPaymentId: true,
       },
     });
 
@@ -374,62 +375,142 @@ export class PagamentosService {
         },
       }));
 
-    const pagamentoId = await this.prisma.$transaction(async (tx) => {
-      const paymentData = {
-        paymentId: payment.paymentId,
-        status: payment.status,
-        statusDetail: payment.statusDetail,
-        approvedAt: payment.approvedAt,
-      };
+    let pagamentoId: number;
 
-      let registroPagamentoId: number;
+    try {
+      pagamentoId = await this.prisma.$transaction(async (tx) => {
+        const paymentData = {
+          paymentId: payment.paymentId,
+          status: payment.status,
+          statusDetail: payment.statusDetail,
+          approvedAt: payment.approvedAt,
+        };
 
-      if (tentativaPendente) {
-        await tx.pagamento.update({
-          where: {
-            id: tentativaPendente.id,
-          },
-          data: paymentData,
-        });
+        let registroPagamentoId: number;
 
-        registroPagamentoId = tentativaPendente.id;
-      } else {
-        // Cada nova tentativa recebe seu próprio registro.
-        // preferenceId permanece no registro original, pois é único.
-        const novoPagamento = await tx.pagamento.create({
-          data: {
-            pedidoId: pedido.id,
-            provider: 'MERCADO_PAGO',
-            ...paymentData,
-          },
-        });
+        if (pagamentoExistente) {
+          await tx.pagamento.update({
+            where: {
+              id: pagamentoExistente.id,
+            },
+            data: paymentData,
+          });
 
-        registroPagamentoId = novoPagamento.id;
-      }
+          registroPagamentoId = pagamentoExistente.id;
+        } else if (tentativaPendente) {
+          const tentativaAssumida = await tx.pagamento.updateMany({
+            where: {
+              id: tentativaPendente.id,
+              paymentId: null,
+            },
+            data: paymentData,
+          });
 
-      if (
-        payment.status === 'approved' &&
-        pedido.status === StatusPedido.PENDENTE
-      ) {
-        const statusUpdate = await tx.pedido.updateMany({
-          where: {
-            id: pedido.id,
-            status: StatusPedido.PENDENTE,
-          },
-          data: {
-            status: StatusPedido.PAGO,
-          },
-        });
+          if (tentativaAssumida.count === 1) {
+            registroPagamentoId = tentativaPendente.id;
+          } else {
+            const pagamentoCriadoPorOutraOperacao =
+              await tx.pagamento.findUnique({
+                where: {
+                  paymentId: payment.paymentId,
+                },
+              });
 
-        if (statusUpdate.count !== 1) {
-          this.logger.warn(
-            `Pedido ${pedido.id} mudou de status durante a confirmação do pagamento ${payment.paymentId}.`,
-          );
+            if (pagamentoCriadoPorOutraOperacao) {
+              await tx.pagamento.update({
+                where: {
+                  id: pagamentoCriadoPorOutraOperacao.id,
+                },
+                data: paymentData,
+              });
+
+              registroPagamentoId = pagamentoCriadoPorOutraOperacao.id;
+            } else {
+              const novoPagamento = await tx.pagamento.create({
+                data: {
+                  pedidoId: pedido.id,
+                  provider: 'MERCADO_PAGO',
+                  ...paymentData,
+                },
+              });
+
+              registroPagamentoId = novoPagamento.id;
+            }
+          }
+        } else {
+          // Cada nova tentativa recebe seu próprio registro.
+          // preferenceId permanece no registro original, pois é único.
+          const novoPagamento = await tx.pagamento.create({
+            data: {
+              pedidoId: pedido.id,
+              provider: 'MERCADO_PAGO',
+              ...paymentData,
+            },
+          });
+
+          registroPagamentoId = novoPagamento.id;
         }
+
+        if (
+          payment.status === 'approved' &&
+          pedido.status === StatusPedido.PENDENTE
+        ) {
+          const statusUpdate = await tx.pedido.updateMany({
+            where: {
+              id: pedido.id,
+              status: StatusPedido.PENDENTE,
+            },
+            data: {
+              status: StatusPedido.PAGO,
+              paidPaymentId: payment.paymentId,
+            },
+          });
+
+          if (statusUpdate.count !== 1) {
+            this.logger.warn(
+              `Pedido ${pedido.id} mudou de status durante a confirmação do pagamento ${payment.paymentId}.`,
+            );
+          }
+        }
+
+        return registroPagamentoId;
+      });
+    } catch (error) {
+      if (
+        !(
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        )
+      ) {
+        throw error;
       }
 
-      return registroPagamentoId;
-    });
+      const pagamentoConcorrente = await this.prisma.pagamento.findUnique({
+        where: {
+          paymentId: payment.paymentId,
+        },
+      });
+
+      if (!pagamentoConcorrente) {
+        throw error;
+      }
+
+      if (pagamentoConcorrente.pedidoId !== pedido.id) {
+        this.logger.error(
+          `Pagamento ${payment.paymentId} já está associado ao pedido ${pagamentoConcorrente.pedidoId}, mas o webhook informou o pedido ${pedido.id}.`,
+        );
+
+        throw new BadRequestException(
+          'O pagamento informado já está associado a outro pedido.',
+        );
+      }
+
+      pagamentoId = pagamentoConcorrente.id;
+
+      this.logger.log(
+        `Webhook concorrente do pagamento ${payment.paymentId} reutilizou o registro ${pagamentoId}.`,
+      );
+    }
 
     if (payment.status === 'approved') {
       const pedidoAtual = await this.prisma.pedido.findUnique({
@@ -438,6 +519,7 @@ export class PagamentosService {
         },
         select: {
           status: true,
+          paidPaymentId: true,
         },
       });
 
@@ -453,6 +535,25 @@ export class PagamentosService {
           pedido.id,
           pedido.totalPrice,
           payment.paymentId,
+        );
+      } else if (
+        pedidoAtual.paidPaymentId &&
+        pedidoAtual.paidPaymentId !== payment.paymentId
+      ) {
+        await this.reembolsarPagamentoAprovadoDuplicado(
+          pagamentoId,
+          pedido.id,
+          pedido.totalPrice,
+          payment.paymentId,
+          pedidoAtual.paidPaymentId,
+        );
+      } else if (!pedidoAtual.paidPaymentId) {
+        this.logger.error(
+          `Pagamento ${payment.paymentId} foi aprovado para o pedido ${pedido.id}, mas o pedido não possui paidPaymentId definido após o processamento.`,
+        );
+
+        throw new ConflictException(
+          'O pagamento foi aprovado, mas não foi possível determinar com segurança a cobrança oficial do pedido.',
         );
       }
     }
@@ -534,6 +635,7 @@ export class PagamentosService {
       },
       select: {
         status: true,
+        paidPaymentId: true,
       },
     });
 
@@ -541,6 +643,14 @@ export class PagamentosService {
       throw new NotFoundException(
         'Pedido associado ao pagamento não encontrado após a confirmação do reembolso.',
       );
+    }
+
+    if (pedidoAtual.paidPaymentId && pedidoAtual.paidPaymentId !== paymentId) {
+      this.logger.log(
+        `Reembolso do pagamento duplicado ${paymentId} do pedido ${pedidoId} foi reconciliado sem alterar o status do pedido.`,
+      );
+
+      return;
     }
 
     if (pedidoAtual.status === StatusPedido.CANCELADO) {
@@ -568,6 +678,72 @@ export class PagamentosService {
 
     await this.pedidosService.iniciarCancelamentoComReembolso(pedidoId);
     await this.pedidosService.finalizarCancelamentoReembolsado(pedidoId);
+  }
+
+  private async reembolsarPagamentoAprovadoDuplicado(
+    pagamentoId: number,
+    pedidoId: number,
+    totalPrice: Prisma.Decimal,
+    paymentId: string,
+    paidPaymentId: string,
+  ) {
+    const pagamento = await this.prisma.pagamento.findUnique({
+      where: {
+        id: pagamentoId,
+      },
+    });
+
+    if (
+      pagamento?.refundStatus === 'approved' &&
+      pagamento.refundId &&
+      pagamento.refundAmount !== null
+    ) {
+      return;
+    }
+
+    this.logger.warn(
+      `Pagamento duplicado ${paymentId} foi aprovado para o pedido ${pedidoId}, que já foi pago por ${paidPaymentId}. Iniciando reembolso automático.`,
+    );
+
+    const refund = await this.mercadoPagoService.reembolsarPagamento(paymentId);
+
+    if (refund.status !== 'approved') {
+      this.logger.error(
+        `Reembolso automático ${refund.refundId} do pagamento duplicado ${paymentId} retornou status ${refund.status}.`,
+      );
+
+      throw new ServiceUnavailableException(
+        'O Mercado Pago ainda não confirmou o reembolso automático da cobrança duplicada.',
+      );
+    }
+
+    const refundAmount = new Prisma.Decimal(refund.amount);
+
+    if (!refundAmount.equals(totalPrice)) {
+      this.logger.error(
+        `Reembolso automático ${refund.refundId} do pagamento duplicado ${paymentId} possui valor ${refundAmount.toString()}, mas o pedido ${pedidoId} possui total ${totalPrice.toString()}.`,
+      );
+
+      throw new ServiceUnavailableException(
+        'O valor do reembolso automático da cobrança duplicada não corresponde ao valor do pedido.',
+      );
+    }
+
+    await this.prisma.pagamento.update({
+      where: {
+        id: pagamentoId,
+      },
+      data: {
+        refundId: refund.refundId,
+        refundStatus: refund.status,
+        refundAmount,
+        refundedAt: refund.createdAt ?? new Date(),
+      },
+    });
+
+    this.logger.log(
+      `Pagamento duplicado ${paymentId} do pedido ${pedidoId} foi reembolsado automaticamente.`,
+    );
   }
 
   private async reembolsarPagamentoAprovadoDePedidoCancelado(

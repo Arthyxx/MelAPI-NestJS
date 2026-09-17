@@ -22,6 +22,7 @@ describe('PagamentosService — nova tentativa de pagamento', () => {
       id: 1,
       status: StatusPedido.PENDENTE,
       totalPrice: new Prisma.Decimal('75.00'),
+      paidPaymentId: null,
     };
 
     const pagamentoAprovado = {
@@ -47,7 +48,11 @@ describe('PagamentosService — nova tentativa de pagamento', () => {
         findUnique: jest
           .fn()
           .mockResolvedValueOnce(pedido)
-          .mockResolvedValue({ ...pedido, status: StatusPedido.PAGO }),
+          .mockResolvedValue({
+            ...pedido,
+            status: StatusPedido.PAGO,
+            paidPaymentId: pagamentoAprovado.paymentId,
+          }),
       },
       pagamento: {
         // O novo paymentId ainda não existe no banco.
@@ -120,6 +125,7 @@ describe('PagamentosService — nova tentativa de pagamento', () => {
       },
       data: {
         status: StatusPedido.PAGO,
+        paidPaymentId: pagamentoAprovado.paymentId,
       },
     });
 

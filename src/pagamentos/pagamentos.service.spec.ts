@@ -484,9 +484,11 @@ describe('PagamentosService', () => {
         id: 1,
         status: StatusPedido.PENDENTE,
         totalPrice: new Prisma.Decimal('75.00'),
+        paidPaymentId: null,
       })
       .mockResolvedValueOnce({
         status: StatusPedido.PAGO,
+        paidPaymentId: 'pay-123',
       });
 
     prisma.pagamento.findUnique.mockResolvedValue({
@@ -534,6 +536,7 @@ describe('PagamentosService', () => {
 
       data: {
         status: StatusPedido.PAGO,
+        paidPaymentId: 'pay-123',
       },
     });
 
@@ -563,9 +566,11 @@ describe('PagamentosService', () => {
         id: 1,
         status: StatusPedido.PENDENTE,
         totalPrice: new Prisma.Decimal('75.00'),
+        paidPaymentId: null,
       })
       .mockResolvedValueOnce({
         status: StatusPedido.CANCELADO,
+        paidPaymentId: null,
       });
 
     prisma.pagamento.findUnique
@@ -618,6 +623,7 @@ describe('PagamentosService', () => {
 
       data: {
         status: StatusPedido.PAGO,
+        paidPaymentId: 'pay-late-123',
       },
     });
 
