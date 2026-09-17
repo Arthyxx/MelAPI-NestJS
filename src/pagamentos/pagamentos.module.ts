@@ -7,6 +7,7 @@ import { MercadoPagoService } from './mercado-pago.service';
 import { PagamentosController } from './pagamentos.controller';
 import { PagamentosService } from './pagamentos.service';
 import { CheckoutService } from './services/checkout.service';
+import { ReembolsoService } from './services/reembolso.service';
 
 @Module({
   imports: [HttpModule, PedidosModule],
@@ -16,6 +17,7 @@ import { CheckoutService } from './services/checkout.service';
   providers: [
     PagamentosService,
     CheckoutService,
+    ReembolsoService,
     MercadoPagoService,
     MercadoPagoWebhookService,
   ],
